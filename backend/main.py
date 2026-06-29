@@ -2,6 +2,7 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from ingestion.ocr import extract_text_from_image
 from ingestion.cleaner import clean_text
+from ingestion.pdf_extractor import extract_text_from_pdf
 
 app = FastAPI(title="CaseGraph API")
 
@@ -20,8 +21,14 @@ def health_check():
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     contents = await file.read()
-    extracted_text = extract_text_from_image(contents)
+
+    if file.filename.endswith(".pdf"):
+        extracted_text = extract_text_from_pdf(contents)
+    else:
+        extracted_text = extract_text_from_image(contents)
+
     cleaned_text = clean_text(extracted_text)
+    
     return {"filename": file.filename,
         "raw_text": extracted_text,
         "cleaned_text": cleaned_text}
