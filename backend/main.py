@@ -1,8 +1,9 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from ingestion.ocr import extract_text_from_image
-from ingestion.cleaner import clean_text
-from ingestion.pdf_extractor import extract_text_from_pdf
+from backend.ingestion.ocr import extract_text_from_image
+from backend.ingestion.cleaner import clean_text
+from backend.ingestion.pdf_extractor import extract_text_from_pdf
+from backend.nlp.ner import extract_entities
 
 app = FastAPI(title="CaseGraph API")
 
@@ -18,8 +19,8 @@ app.add_middleware(
 def health_check():
     return {"status": "healthy"}
 
-@app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+@app.post("/extract")
+async def extract(file: UploadFile = File(...)):
     contents = await file.read()
 
     if file.filename.endswith(".pdf"):
@@ -28,7 +29,8 @@ async def upload_file(file: UploadFile = File(...)):
         extracted_text = extract_text_from_image(contents)
 
     cleaned_text = clean_text(extracted_text)
-    
+    entities = extract_entities(cleaned_text)
+
     return {"filename": file.filename,
-        "raw_text": extracted_text,
-        "cleaned_text": cleaned_text}
+        "cleaned_text": cleaned_text,
+        "entities": entities}
