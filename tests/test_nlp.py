@@ -1,6 +1,6 @@
 import pytest
 from backend.nlp.ner import extract_entities
-from backend.nlp.regex_extractor import extract_phone_numbers, extract_vehicle_numbers
+from backend.nlp.regex_extractor import extract_phone_numbers, extract_vehicle_numbers, extract_fir_number
 
 
 def test_extract_entities_finds_person():
@@ -56,3 +56,26 @@ def test_extract_vehicle_numbers_no_match():
     text = "No vehicle mentioned in this sentence."
     vehicles = extract_vehicle_numbers(text)
     assert vehicles == []
+
+def test_extract_fir_number_standard_format():
+    text = "Case No: 145/2026"
+    assert extract_fir_number(text) == "145/2026"
+
+def test_extract_fir_number_no_match():
+    text = "No FIR number mentioned here."
+    assert extract_fir_number(text) is None
+
+def test_extract_fir_number_standard():
+    assert extract_fir_number("FIR No: 145/2026") == "145/2026"
+
+def test_extract_fir_number_with_station_code():
+    assert extract_fir_number("FIR Number: 0123/145/2026") == "0123/145/2026"
+
+def test_extract_fir_number_crime_no_variant():
+    assert extract_fir_number("Crime No. 45/2026") == "45/2026"
+
+def test_extract_fir_number_not_confused_by_trailing_date():
+    assert extract_fir_number("Case No: 145/2026, filed on 15/06/2026") == "145/2026"
+
+def test_extract_fir_number_no_match():
+    assert extract_fir_number("No FIR number mentioned here.") is None
