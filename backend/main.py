@@ -4,6 +4,7 @@ from backend.ingestion.ocr import extract_text_from_image
 from backend.ingestion.cleaner import clean_text
 from backend.ingestion.pdf_extractor import extract_text_from_pdf
 from backend.nlp.ner import extract_entities
+from backend.nlp.regex_extractor import extract_entities as extract_regex_entities
 
 app = FastAPI(title="CaseGraph API")
 
@@ -30,7 +31,9 @@ async def extract(file: UploadFile = File(...)):
 
     cleaned_text = clean_text(extracted_text)
     entities = extract_entities(cleaned_text)
+    regex_entities = extract_regex_entities(cleaned_text)
 
     return {"filename": file.filename,
         "cleaned_text": cleaned_text,
-        "entities": entities}
+        "entities": entities,
+        "regex_entities": regex_entities}

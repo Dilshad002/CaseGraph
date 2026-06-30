@@ -11,6 +11,7 @@ ENTITY_LABELS = {
     "TIME": "time",
     "CARDINAL": "number",
     "FAC": "facility",
+    "MONEY": "money",
 }
 
 def extract_entities(text: str) -> list[dict]:
@@ -21,7 +22,7 @@ def extract_entities(text: str) -> list[dict]:
     for ent in doc.ents:
         if ent.label_ not in ENTITY_LABELS:
             continue
-        key = (ent.text, ent.label_)
+        key = (ent.text.strip(), ent.label_)
         if key in seen:
             continue
         seen.add(key)
