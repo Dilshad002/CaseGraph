@@ -3,10 +3,10 @@ import spacy
 nlp = spacy.load("en_core_web_sm")
 
 ENTITY_LABELS = {
-    "PERSON": "Person",
-    "ORG": "Organization",
-    "GPE": "Location", 
-    "LOC": "Location",
+    "PERSON": "person",
+    "ORG": "organization",
+    "GPE": "location", 
+    "LOC": "location",
     "DATE": "date",
     "TIME": "time",
     "CARDINAL": "number",
