@@ -7,6 +7,7 @@ from backend.ingestion.pdf_extractor import extract_text_from_pdf
 from backend.nlp.ner import extract_entities
 from backend.nlp.regex_extractor import extract_regex_entities, strip_overlapping_ner_entities
 from backend.graph.writer import write_extractions_to_graph
+from backend.nlp.field_stripper import strip_field_labels
 
 app = FastAPI(title="CaseGraph API")
 
@@ -32,8 +33,10 @@ async def extract(file: UploadFile = File(...)):
         extracted_text = extract_text_from_image(contents)
 
     cleaned_text = clean_text(extracted_text)
-    entities = extract_entities(cleaned_text)
-    regex_entities = extract_regex_entities(cleaned_text)
+    regex_entities = extract_regex_entities(cleaned_text) #original text
+
+    ner_input = strip_field_labels(cleaned_text)  #strip field labels from cleaned text before NER
+    entities = extract_entities(ner_input) 
     entities = strip_overlapping_ner_entities(entities, regex_entities)
 
     case_id = str(uuid.uuid4())
