@@ -18,7 +18,7 @@ def extract_vehicle_numbers(text: str) -> list:
     matches = VEHICLE_PATTERN.findall(text)
     return list(set(m.strip() for m in matches))
 
-def extract_entities(text: str) -> dict:
+def extract_regex_entities(text: str) -> dict:
     return {
         "phone_numbers": extract_phone_numbers(text),
         "vehicle_numbers": extract_vehicle_numbers(text)
