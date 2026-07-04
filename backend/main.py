@@ -6,7 +6,7 @@ from backend.ingestion.cleaner import clean_text
 from backend.ingestion.pdf_extractor import extract_text_from_pdf
 from backend.nlp.ner import extract_entities
 from backend.nlp.regex_extractor import extract_regex_entities, strip_overlapping_ner_entities
-from backend.graph.writer import write_extractions_to_graph
+from backend.graph.writer import write_extractions_to_graph, write_relationships_to_graph
 from backend.nlp.field_stripper import strip_field_labels
 from backend.reasoning.relation_extractor import extract_relationships
 
@@ -48,7 +48,7 @@ async def extract(file: UploadFile = File(...)):
 
     case_id = str(uuid.uuid4())
     write_extractions_to_graph(case_id, file.filename, entities, regex_entities)
-    # write_relationships_to_graph(case_id, relationships, regex_entities.get("fir_number"))
+    write_relationships_to_graph(case_id, relationships, file.filename, entities, regex_entities.get("fir_number"))
 
     return {"filename": file.filename,
         "cleaned_text": cleaned_text,

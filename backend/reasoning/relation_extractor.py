@@ -45,8 +45,10 @@ Do not paraphrase entity names if an equivalent extracted entity already exists.
 
 Do not rewrite or summarize it.
 
-7, If a single sentence contains multiple distinct factual relationships (e.g., x confronted y, and y fled in a car), 
+7. If a single sentence contains multiple distinct factual relationships (e.g., x confronted y, and y fled in a car),
 extract each one as a separate relationship object, each with its own precise source_span covering only that clause.
+
+8. If a sentence reports one entity observing, showing, or describing another entity's action (e.g., "CCTV footage showed X carrying a bag", "witnesses stated X did Y"), extract the underlying action as its own relationship with the acting entity as subject — do not fold the action into a relation on the reporting entity (e.g. do not produce "CCTV SHOWED X"; instead produce "X CARRIED bag").
 
 -----------------------
 RELATION SELECTION
@@ -80,6 +82,15 @@ Return a JSON array of relationships in this exact format:
 ]
 
 If no relationships are explicitly stated, return [].
+
+-----------------------
+ROLE REFERENCES
+-----------------------
+
+The following references in the document map to known entities.
+Treat these as equivalent when extracting relationships:
+
+{role_lines}
 
 -----------------------
 KNOWN ENTITIES
@@ -127,6 +138,11 @@ RELATION_KEYWORDS = {
 
     "CONFRONTED": [
         "confronted"
+    ],
+
+    "IDENTIFIED_AS": [
+        "identified as",
+        "identified to be"
     ]
 }
 
@@ -137,6 +153,12 @@ RELATION_ALIASES = {
     "FLED": "FLED_IN",
 }
 
+OWNERSHIP_KEYWORDS = ["belonging to", "owned by", "registered in the name of", "his vehicle", "her vehicle"]
+
+INFERENCE_BLACKLIST = {
+    "STOLE", "KILLED", "ASSAULTED", "MURDERED", "ATTACKED"
+}
+
 def build_role_map(text: str) -> dict:
     complainant = re.search(r"Complainant\s*(?:Details)?.*?Name:\s*(.+)", text, re.DOTALL)
     accused = re.search(r"Accused\s*(?:Details)?.*?Name:\s*(.+)", text, re.DOTALL)
@@ -144,15 +166,14 @@ def build_role_map(text: str) -> dict:
     role_map = {}
     if complainant:
         name = complainant.group(1).split("\n")[0].strip()
-        role_map[name] = {"unambiguous": {"the complainant"}}
+        role_map[name] = {"unambiguous": {"the complainant", "complainant"}}
     if accused:
         name = accused.group(1).split("\n")[0].strip()
-        role_map[name] = {"unambiguous": {"the accused"}}
+        role_map[name] = {"unambiguous": {"the accused", "accused", "unknown individual", "an unknown individual"}}
     return role_map
 
 def _canonical_relation(relation: str) -> str:
     r = relation.upper().strip()
-    # normalize common verb endings so OWNED/OWNS/OWNING map to one key
     if r.endswith("ED") and r[:-2] in RELATION_KEYWORDS:
         return r[:-2]
     if r.endswith("D") and r[:-1] in RELATION_KEYWORDS:
@@ -163,23 +184,34 @@ def _canonical_relation(relation: str) -> str:
 
 def relation_supported(relation, span):
     span = span.lower()
-
     canon = _canonical_relation(relation)
     canon = RELATION_ALIASES.get(canon, canon)
-
     keywords = RELATION_KEYWORDS.get(canon)
     if keywords is None:
         return False
-
     return any(k in span for k in keywords)
+
+def resolve_role_reference(entity: str, role_map: dict) -> str:
+    entity_lower = entity.lower().strip()
+    for name, data in role_map.items():
+        refs = {r.lower() for r in data.get("unambiguous", set())}
+        if entity_lower in refs:
+            return name
+    return entity
 
 def _normalize_whitespace(s: str) -> str:
     return re.sub(r'\s+', ' ', s).strip()
 
 def extract_relationships(text: str, entity_texts: list[str]) -> list[dict]:
     role_map = build_role_map(text)
+    role_lines = "\n".join(
+        f"- '{ref}' refers to '{name}'"
+        for name, data in role_map.items()
+        for ref in data.get("unambiguous", set())
+    )
     print("ROLE MAP:", role_map)
-    prompt = RELATION_EXTRACTION_PROMPT.format(entities=", ".join(entity_texts), text=text)
+    print("ROLE LINES:", role_lines)
+    prompt = RELATION_EXTRACTION_PROMPT.format(entities=", ".join(entity_texts), text=text, role_lines=role_lines)
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
@@ -187,18 +219,34 @@ def extract_relationships(text: str, entity_texts: list[str]) -> list[dict]:
         max_tokens=2000,
     )
     raw = response.choices[0].message.content.strip()
-    raw = raw.replace("```json", "").replace("```", "").strip()
+    start = raw.find("[")
+    end = raw.rfind("]")
+    if start != -1 and end != -1:
+        raw = raw[start:end+1]
+    else:
+        print("NO JSON ARRAY FOUND:", raw)
+        return []
 
     try:
         relationships = json.loads(raw)
+        print("RAW:", relationships)
     except json.JSONDecodeError as e:
         print("PARSE FAILED:", e)
         print("RAW LLM OUTPUT:", raw)
         return []
-    
-    relationships = verify_relationships(relationships, text, role_map)
 
+    relationships = verify_relationships(relationships, text, role_map)
     return relationships
+
+def ownership_hallucination_check(relation: str, span: str) -> bool:
+    if relation.upper() in {"OWNED", "OWNS", "BELONGS_TO"}:
+        return not any(k in span.lower() for k in OWNERSHIP_KEYWORDS)
+    return False
+
+def inference_hallucination_check(relation: str, span: str) -> bool:
+    if relation.upper() in INFERENCE_BLACKLIST:
+        return True  # always drop — these require explicit attribution
+    return False
 
 def relation_grounded(subject, obj, span, role_map):
     span_lower = span.lower()
@@ -224,16 +272,19 @@ def verify_relationships(relationships: list[dict], source_text: str, role_map: 
         if not span:
             continue
 
-        subject = rel.get("subject", "")
-        obj = rel.get("object", "")
+        subject = resolve_role_reference(rel.get("subject", ""), role_map)
+        obj = resolve_role_reference(rel.get("object", ""), role_map)
         relation = rel.get("relation", "")
 
-        if not relation_supported(relation, span):
+        if ownership_hallucination_check(relation, span):
+            continue
+        if inference_hallucination_check(relation, span):
             continue
         if not relation_grounded(subject, obj, span, role_map):
             continue
         if _normalize_whitespace(span) not in normalized_source:
             continue
 
+        rel = {**rel, "subject": subject, "object": obj}
         verified.append(rel)
     return verified
