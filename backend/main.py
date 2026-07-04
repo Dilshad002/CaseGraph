@@ -5,10 +5,11 @@ from backend.ingestion.ocr import extract_text_from_image
 from backend.ingestion.cleaner import clean_text
 from backend.ingestion.pdf_extractor import extract_text_from_pdf
 from backend.nlp.ner import extract_entities
-from backend.nlp.regex_extractor import extract_regex_entities, strip_overlapping_ner_entities
-from backend.graph.writer import write_extractions_to_graph, write_relationships_to_graph
+from backend.nlp.regex_extractor import extract_regex_entities, strip_overlapping_ner_entities, extract_person_attributes
+from backend.graph.writer import write_extractions_to_graph, write_relationships_to_graph, write_person_attributes
 from backend.nlp.field_stripper import strip_field_labels
-from backend.reasoning.relation_extractor import extract_relationships
+from backend.reasoning.relation_extractor import extract_relationships, build_role_map
+from backend.reasoning.contradiction_detection import detect_contradictions
 
 app = FastAPI(title="CaseGraph API")
 
@@ -50,9 +51,22 @@ async def extract(file: UploadFile = File(...)):
     write_extractions_to_graph(case_id, file.filename, entities, regex_entities)
     write_relationships_to_graph(case_id, relationships, file.filename, entities, regex_entities.get("fir_number"))
 
+    role_map = build_role_map(cleaned_text)
+    person_attrs = extract_person_attributes(cleaned_text, role_map)
+    fir_number = regex_entities.get("fir_number")
+    for p in person_attrs:
+        write_person_attributes(p["name"], p["attributes"], fir_number, file.filename)
+    
+    print("PERSON ATTRS:", person_attrs)
+
     return {"filename": file.filename,
         "cleaned_text": cleaned_text,
         "entities": entities,
         "regex_entities": regex_entities,
         "relationships": relationships,
         }
+
+@app.get("/contradict")
+def contradictions(entity: str):
+    contradictions = detect_contradictions(entity)
+    return contradictions

@@ -3,6 +3,7 @@ import os
 import re
 from dotenv import load_dotenv
 from groq import Groq
+from backend.nlp.regex_extractor import extract_description_section
 
 load_dotenv()
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -211,7 +212,9 @@ def extract_relationships(text: str, entity_texts: list[str]) -> list[dict]:
     )
     print("ROLE MAP:", role_map)
     print("ROLE LINES:", role_lines)
-    prompt = RELATION_EXTRACTION_PROMPT.format(entities=", ".join(entity_texts), text=text, role_lines=role_lines)
+
+    narrative = extract_description_section(text)
+    prompt = RELATION_EXTRACTION_PROMPT.format(entities=", ".join(entity_texts), text=narrative, role_lines=role_lines)
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],

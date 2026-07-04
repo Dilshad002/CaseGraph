@@ -16,6 +16,32 @@ UPI_PATTERN = re.compile(r'\b([\w.\-]+@(?:okaxis|ybl|paytm|oksbi|okhdfcbank|okic
 BANK_ACCOUNT_PATTERN = re.compile(r'(?:Bank\s*Account|Account\s*No\.?|A/C\s*No\.?)\s*(?:Mentioned)?:?\s*(\d{9,18})\b', re.IGNORECASE)
 DRIVING_LICENCE_PATTERN = re.compile(r'(?:Driving\s*Licen[cs]e)\s*:?\s*([A-Z]{2}\d{13,14})\b', re.IGNORECASE)
 
+AGE_PATTERN = re.compile(
+    r'(?:Accused|Complainant)\s+Details.*?Age:\s*(\d+)',
+    re.DOTALL | re.IGNORECASE
+)
+ADDRESS_PATTERN = re.compile(
+    r'(?:Accused|Complainant)\s+Details.*?Address:\s*(.+?)(?:Mobile:|Email:|Aadhaar:|$)',
+    re.DOTALL | re.IGNORECASE
+)
+
+def extract_description_section(text: str) -> str:
+    match = re.search(r'Description:\s*(.+?)(?:Witnesses|Recovered Evidence|Investigating Officer|$)',
+        text, re.DOTALL | re.IGNORECASE
+    )
+    return match.group(1).strip() if match else text
+
+def extract_person_attributes(text: str, role_map: dict = None) -> list[dict]:
+    results = []
+    section_pattern = re.compile(r'(Complainant|Accused)\s+Details\s*[\r\n]+Name:\s*(.+?)[\r\n]+Age:\s*(\d+)',
+    re.IGNORECASE
+    )
+    for match in section_pattern.finditer(text):
+        name = match.group(2).strip()
+        age = match.group(3).strip()
+        results.append({"name": name, "attributes": {"age": age}})
+    return results
+
 def strip_overlapping_ner_entities(entities: list, regex_entities: dict) -> list:
     raw_values = set()
     digit_values = set()

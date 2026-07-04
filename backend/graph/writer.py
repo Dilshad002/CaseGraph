@@ -5,6 +5,22 @@ GLOBAL_TYPES = {
     "pan", "passport", "upi_id", "bank_account", "ifsc"
 }
 
+def write_person_attributes(person_name: str, attributes: dict, fir_number: str, filename: str):
+    #Write age, address as FIR-scoped relationships from a person node.
+    with get_session() as session:
+        for attr_type, attr_value in attributes.items():
+            if not attr_value:
+                continue
+            session.run(
+            """
+            MERGE (p:Entity {text: $name, type: 'person'})
+            MERGE (a:Entity {text: $value, type: $attr_type})
+            MERGE (p)-[r:HAS_ATTRIBUTE {fir: $fir_number, attr: $attr_type, person: $name}]->(a)
+            SET r.source = $filename
+            """,
+            name=person_name, value=str(attr_value),
+            attr_type=attr_type, fir_number=fir_number, filename=filename
+        )
 
 def create_case_node(case_id: str, filename: str, fir_number: str = None):
     with get_session() as session:
