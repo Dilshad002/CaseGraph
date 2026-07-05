@@ -54,10 +54,13 @@ async def extract(file: UploadFile = File(...)):
     role_map = build_role_map(cleaned_text)
     person_attrs = extract_person_attributes(cleaned_text, role_map)
     fir_number = regex_entities.get("fir_number")
+
     for p in person_attrs:
+        print("WRITING ATTR:", p["name"], p["attributes"], fir_number)
         write_person_attributes(p["name"], p["attributes"], fir_number, file.filename)
     
     print("PERSON ATTRS:", person_attrs)
+    print("CLEANED TEXT SNIPPET:", cleaned_text[cleaned_text.find("Accused"):cleaned_text.find("Accused")+200])
 
     return {"filename": file.filename,
         "cleaned_text": cleaned_text,

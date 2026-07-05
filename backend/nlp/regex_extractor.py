@@ -33,12 +33,19 @@ def extract_description_section(text: str) -> str:
 
 def extract_person_attributes(text: str, role_map: dict = None) -> list[dict]:
     results = []
-    section_pattern = re.compile(r'(Complainant|Accused)\s+Details\s*[\r\n]+Name:\s*(.+?)[\r\n]+Age:\s*(\d+)',
-    re.IGNORECASE
+    seen = set()
+    section_pattern = re.compile(
+        r'(Complainant|Accused)\s+Details\s*[\r\n]+\s*Name:\s*(.+?)[\r\n]+\s*Age:\s*(\d+)',
+        re.IGNORECASE
     )
     for match in section_pattern.finditer(text):
         name = match.group(2).strip()
         age = match.group(3).strip()
+        print("MATCH:", repr(name), repr(age))
+        key = (name, age)
+        if key in seen:
+            continue
+        seen.add(key)
         results.append({"name": name, "attributes": {"age": age}})
     return results
 
