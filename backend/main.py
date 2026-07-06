@@ -10,6 +10,7 @@ from backend.graph.writer import write_extractions_to_graph, write_relationships
 from backend.nlp.field_stripper import strip_field_labels
 from backend.reasoning.relation_extractor import extract_relationships, build_role_map
 from backend.reasoning.contradiction_detection import detect_contradictions
+from backend.assistant.query_engine import query as run_query
 
 app = FastAPI(title="CaseGraph API")
 
@@ -83,3 +84,7 @@ async def extract(file: UploadFile = File(...)):
 def contradictions(entity: str):
     contradictions = detect_contradictions(entity)
     return contradictions
+
+@app.get("/query")
+def query_endpoint(question: str):
+    return run_query(question)
