@@ -210,8 +210,6 @@ def extract_relationships(text: str, entity_texts: list[str]) -> list[dict]:
         for name, data in role_map.items()
         for ref in data.get("unambiguous", set())
     )
-    print("ROLE MAP:", role_map)
-    print("ROLE LINES:", role_lines)
 
     narrative = extract_description_section(text)
     prompt = RELATION_EXTRACTION_PROMPT.format(entities=", ".join(entity_texts), text=narrative, role_lines=role_lines)

@@ -5,8 +5,8 @@ from backend.ingestion.ocr import extract_text_from_image
 from backend.ingestion.cleaner import clean_text
 from backend.ingestion.pdf_extractor import extract_text_from_pdf
 from backend.nlp.ner import extract_entities
-from backend.nlp.regex_extractor import extract_regex_entities, strip_overlapping_ner_entities, extract_person_attributes
-from backend.graph.writer import write_extractions_to_graph, write_relationships_to_graph, write_person_attributes
+from backend.nlp.regex_extractor import extract_regex_entities, strip_overlapping_ner_entities, extract_person_attributes, extract_incident_details
+from backend.graph.writer import write_extractions_to_graph, write_relationships_to_graph, write_person_attributes, write_incident_to_graph
 from backend.nlp.field_stripper import strip_field_labels
 from backend.reasoning.relation_extractor import extract_relationships, build_role_map
 from backend.reasoning.contradiction_detection import detect_contradictions
@@ -61,6 +61,16 @@ async def extract(file: UploadFile = File(...)):
     
     print("PERSON ATTRS:", person_attrs)
     print("CLEANED TEXT SNIPPET:", cleaned_text[cleaned_text.find("Accused"):cleaned_text.find("Accused")+200])
+
+    incident = extract_incident_details(cleaned_text)
+    accused_name = None
+    for name, data in role_map.items():
+        if "accused" in data.get("unambiguous", set()):
+            accused_name = name
+            break
+
+    write_incident_to_graph(fir_number, incident, accused_name)
+    print("INCIDENT:", incident, "ACCUSED:", accused_name)
 
     return {"filename": file.filename,
         "cleaned_text": cleaned_text,

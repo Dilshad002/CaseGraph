@@ -25,6 +25,18 @@ ADDRESS_PATTERN = re.compile(
     re.DOTALL | re.IGNORECASE
 )
 
+def extract_incident_details(text: str) -> dict:
+    date_match = re.search(r'Date of Occurrence:\s*(\d{1,2}/\d{1,2}/\d{4})', text, re.IGNORECASE)
+    time_match = re.search(r'Time\s*(?:of Occurrence)?:\s*(?:Between\s*)?(\d{1,2}:\d{2}\s*(?:AM|PM))\s*(?:and\s*(\d{1,2}:\d{2}\s*(?:AM|PM)))?', text, re.IGNORECASE)
+    place_match = re.search(r'Place of Occurrence:\s*(.+?)(?:\n\n|Description:|$)', text, re.DOTALL | re.IGNORECASE)
+
+    return {
+        "date": date_match.group(1).strip() if date_match else None,
+        "time_start": time_match.group(1).strip() if time_match else None,
+        "time_end": time_match.group(2).strip() if time_match and time_match.group(2) else None,
+        "place": ' '.join(place_match.group(1).strip().split()) if place_match else None
+    }
+
 def extract_description_section(text: str) -> str:
     match = re.search(r'Description:\s*(.+?)(?:Witnesses|Recovered Evidence|Investigating Officer|$)',
         text, re.DOTALL | re.IGNORECASE
@@ -35,18 +47,36 @@ def extract_person_attributes(text: str, role_map: dict = None) -> list[dict]:
     results = []
     seen = set()
     section_pattern = re.compile(
-        r'(Complainant|Accused)\s+Details\s*[\r\n]+\s*Name:\s*(.+?)[\r\n]+\s*Age:\s*(\d+)',
-        re.IGNORECASE
+    r'(Complainant|Accused)\s*(?:Details)?\s*:?\s*[\r\n]+(.*?)(?=(?:Complainant|Accused)\s*(?:Details)?\s*:|Incident|$)',
+    re.IGNORECASE | re.DOTALL
     )
     for match in section_pattern.finditer(text):
-        name = match.group(2).strip()
-        age = match.group(3).strip()
-        print("MATCH:", repr(name), repr(age))
-        key = (name, age)
+        section = match.group(2)
+
+        name_match = re.search(r'Name:\s*(.+)', section)
+        age_match = re.search(r'Age:\s*(\d+)', section)
+        mobile_match = re.search(r'Mobile:\s*(\d[\d\s-]{8,})', section)
+
+        if not name_match:
+            continue
+
+        name = name_match.group(1).strip()
+        key = name
         if key in seen:
             continue
         seen.add(key)
-        results.append({"name": name, "attributes": {"age": age}})
+
+        attrs = {}
+        if age_match:
+            attrs["age"] = age_match.group(1).strip()
+        if mobile_match:
+            digits = re.sub(r'\D', '', mobile_match.group(1))
+            if len(digits) == 10:
+                attrs["mobile"] = digits
+
+        if attrs:
+            results.append({"name": name, "attributes": attrs})
+
     return results
 
 def strip_overlapping_ner_entities(entities: list, regex_entities: dict) -> list:

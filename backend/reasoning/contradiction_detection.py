@@ -1,4 +1,24 @@
 from backend.graph.connection import get_session
+from datetime import datetime
+
+def parse_time(t: str) -> datetime:
+    if not t:
+        return None
+    for fmt in ["%I:%M %p", "%I:%M%p"]:
+        try:
+            return datetime.strptime(t.strip().upper(), fmt)
+        except ValueError:
+            continue
+    return None
+
+def times_overlap(start1: str, end1: str, start2: str, end2: str) -> bool:
+    s1, e1 = parse_time(start1), parse_time(end1)
+    s2, e2 = parse_time(start2), parse_time(end2)
+    if not all([s1, s2]):
+        return False
+    e1 = e1 or s1
+    e2 = e2 or s2
+    return s1 <= e2 and s2 <= e1
 
 def get_entity_appearances(entity_text: str) -> list[dict]:
     #Get all cases that mention a specific entity.
@@ -110,8 +130,43 @@ def detect_contradictions(entity_text: str) -> dict:
             "conflict": attr_conflict["conflict"]
         })
 
+    temporal_contradictions = detect_temporal_spatial_contradictions(entity_text)
+    contradictions.extend(temporal_contradictions)
+
     return {
         "entity": entity_text,
         "appears_in": appearances,
         "contradictions": contradictions
     }
+
+def detect_temporal_spatial_contradictions(entity_text: str) -> list[dict]:
+    with get_session() as session:
+        result = session.run(
+            """
+            MATCH (p:Entity {text: $name})-[:ACCUSED_IN]->(c1:Case)-[:INCIDENT_TIME]->(t1:TimeWindow),
+                  (c1)-[:INCIDENT_LOCATION]->(l1:Entity),
+                  (p)-[:ACCUSED_IN]->(c2:Case)-[:INCIDENT_TIME]->(t2:TimeWindow),
+                  (c2)-[:INCIDENT_LOCATION]->(l2:Entity)
+            WHERE c1.fir_number < c2.fir_number
+            AND t1.date = t2.date
+            AND l1.text <> l2.text
+            RETURN c1.fir_number AS fir1, l1.text AS location1, t1.start AS start1, t1.end AS end1,
+                   c2.fir_number AS fir2, l2.text AS location2, t2.start AS start2, t2.end AS end2,
+                   t1.date AS date
+            """,
+            name=entity_text
+        )
+        rows = [dict(r) for r in result]
+
+    contradictions = []
+    for row in rows:
+        if times_overlap(row["start1"], row["end1"], row["start2"], row["end2"]):
+            contradictions.append({
+                "type": "temporal_spatial_conflict",
+                "date": row["date"],
+                "conflict": {
+                    row["fir1"]: {"location": row["location1"], "time": f"{row['start1']} - {row['end1']}"},
+                    row["fir2"]: {"location": row["location2"], "time": f"{row['start2']} - {row['end2']}"}
+                }
+            })
+    return contradictions

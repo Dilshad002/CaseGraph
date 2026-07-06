@@ -119,6 +119,34 @@ def _create_relationship(tx, rel: dict, fir_number: str, filename: str, entities
         fir_number=fir_number, case_key=case_key,
     )
 
+def write_incident_to_graph(fir_number: str, incident: dict, accused_name: str):
+    if not incident.get("date") or not incident.get("place"):
+        return
+    with get_session() as session:
+        session.run(
+            """
+            MATCH (c:Case {fir_number: $fir_number})
+            MERGE (l:Entity {text: $place, type: 'location'})
+            MERGE (t:TimeWindow {date: $date, start: $time_start, end: $time_end, fir: $fir_number})
+            MERGE (c)-[:INCIDENT_LOCATION]->(l)
+            MERGE (c)-[:INCIDENT_TIME]->(t)
+            """,
+            fir_number=fir_number,
+            place=incident["place"],
+            date=incident["date"],
+            time_start=incident.get("time_start", ""),
+            time_end=incident.get("time_end", "")
+        )
+        if accused_name:
+            session.run(
+                """
+                MATCH (c:Case {fir_number: $fir_number})
+                MERGE (p:Entity {text: $name, type: 'person'})
+                MERGE (p)-[:ACCUSED_IN]->(c)
+                """,
+                fir_number=fir_number, name=accused_name
+            )
+
 
 def write_relationships_to_graph(case_id: str, relationships: list, filename: str, entities: list, fir_number: str = None):
     with get_session() as session:
