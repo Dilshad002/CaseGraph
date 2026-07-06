@@ -55,7 +55,7 @@ def extract_person_attributes(text: str, role_map: dict = None) -> list[dict]:
 
         name_match = re.search(r'Name:\s*(.+)', section)
         age_match = re.search(r'Age:\s*(\d+)', section)
-        mobile_match = re.search(r'Mobile:\s*(\d[\d\s-]{8,})', section)
+        mobile_match = re.search(r'Mobile:\s*([6-9]\d{9})', section)
 
         if not name_match:
             continue
