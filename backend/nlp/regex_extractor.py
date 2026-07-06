@@ -47,7 +47,7 @@ def extract_person_attributes(text: str, role_map: dict = None) -> list[dict]:
     results = []
     seen = set()
     section_pattern = re.compile(
-    r'(Complainant|Accused)\s*(?:Details)?\s*:?\s*[\r\n]+(.*?)(?=(?:Complainant|Accused)\s*(?:Details)?\s*:|Incident|$)',
+    r'(Complainant|Accused)\s*(?:Details)?\s*:?\s*[\r\n]+(.*?)(?=(?:Complainant|Accused)\s*(?:Details)?|Incident|$)',
     re.IGNORECASE | re.DOTALL
     )
     for match in section_pattern.finditer(text):

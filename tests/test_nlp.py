@@ -1,4 +1,3 @@
-import pytest
 from backend.nlp.ner import extract_entities
 from backend.nlp.regex_extractor import extract_phone_numbers, extract_vehicle_numbers, extract_fir_number
 
