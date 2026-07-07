@@ -57,11 +57,7 @@ async def extract(file: UploadFile = File(...)):
     fir_number = regex_entities.get("fir_number")
 
     for p in person_attrs:
-        print("WRITING ATTR:", p["name"], p["attributes"], fir_number)
         write_person_attributes(p["name"], p["attributes"], fir_number, file.filename)
-    
-    print("PERSON ATTRS:", person_attrs)
-    print("CLEANED TEXT SNIPPET:", cleaned_text[cleaned_text.find("Accused"):cleaned_text.find("Accused")+200])
 
     incident = extract_incident_details(cleaned_text)
     accused_name = None
@@ -71,7 +67,6 @@ async def extract(file: UploadFile = File(...)):
             break
 
     write_incident_to_graph(fir_number, incident, accused_name)
-    print("INCIDENT:", incident, "ACCUSED:", accused_name)
 
     return {"filename": file.filename,
         "cleaned_text": cleaned_text,

@@ -44,6 +44,8 @@ UNION
 MATCH (s:Entity)-[r:RELATION {fir: $fir}]->(o:Entity)
 RETURN s.text + ' ' + r.type + ' ' + o.text AS text, 'relation' AS type
 
+When querying relationships, always include r.source_span in the RETURN clause.
+
 Always use 'DISTINCT' where appropriate to avoid duplicate results.
 Return ONLY valid JSON. No explanation outside the JSON."""
 
@@ -101,11 +103,13 @@ def query(question: str) -> dict:
                         temperature=0,
                         max_tokens=150
             )
+            sources = [r.get("source_span") or r.get("span") for r in results if r.get("source_span") or r.get("span")]
             return {
                 "type": "GRAPH_QUERY",
                 "cypher": parsed["cypher"],
                 "results": results,
-                "answer": summary_response.choices[0].message.content.strip()
+                "answer": summary_response.choices[0].message.content.strip(),
+                "sources": [s for s in sources if s]
             }
         except Exception as e:
             return {"type": "error", "message": str(e)}
