@@ -27,8 +27,35 @@ Graph schema:
 - (Case)-[:INCIDENT_TIME]->(TimeWindow)
 - (Case)-[:INCIDENT_LOCATION]->(Entity)
 
+To find vehicles linked to a person, use:
+    MATCH (p:Entity {text: $name})-[r:RELATION]->(v:Entity)
+    WHERE r.type IN ['FLED_IN', 'ESCAPED_ON', 'DROVE', 'PARKED']
+    RETURN v.text, r.type, r.fir
+
+IMPORTANT: Vehicle descriptions like "white Hyundai i20" are stored with type 'unknown', NOT 'vehicle_number'. 
+vehicle_number type is only for registration plates like 'KA03AB1122'.
+When querying for vehicles linked to a person via FLED_IN, ESCAPED_ON etc, do NOT filter by type.
+
+For FIR summary queries, use this pattern instead of MENTIONS:
+MMATCH (c:Case {fir_number: $fir})-[:MENTIONS]->(e:Entity)
+WHERE e.type IN ['person', 'location', 'vehicle_number', 'phone_number']
+RETURN DISTINCT e.text AS text, e.type AS type
+UNION
+MATCH (s:Entity)-[r:RELATION {fir: $fir}]->(o:Entity)
+RETURN s.text + ' ' + r.type + ' ' + o.text AS text, 'relation' AS type
+
 Always use 'DISTINCT' where appropriate to avoid duplicate results.
 Return ONLY valid JSON. No explanation outside the JSON."""
+
+NOISE_TYPES = {"number", "unknown", "date", "time"}
+
+def filter_summary_entities(results: list[dict]) -> list[dict]:
+    return [
+        r for r in results
+        if r.get("type") not in NOISE_TYPES
+        and r.get("text", "").strip()
+        and not r.get("text", "").strip().isdigit()
+    ]
 
 def run_cypher(cypher: str) -> list[dict]:
     with get_session() as session:
@@ -63,15 +90,21 @@ def query(question: str) -> dict:
             summary_response = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[
-                    {"role": "user", "content": f"Question: {question}\nData: {json.dumps(results)}\nAnswer the question in 1-2 sentences based on the data."}
-                ],
-                temperature=0,
-                max_tokens=200
+                    {"role": "user", "content": f"""Question: {question}
+
+                    Database returned these exact results: {json.dumps(results)}
+
+                    Write one sentence that directly answers the question using ONLY the values in the results above.
+                    Start your answer with the actual values from the results, not with "Based on" or "According to".
+                    If the results are empty, say no results were found."""}
+                        ],
+                        temperature=0,
+                        max_tokens=150
             )
             return {
                 "type": "GRAPH_QUERY",
                 "cypher": parsed["cypher"],
-                # "results": results,
+                "results": results,
                 "answer": summary_response.choices[0].message.content.strip()
             }
         except Exception as e:
