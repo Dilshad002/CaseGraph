@@ -30,7 +30,7 @@ Graph schema:
 To find vehicles linked to a person, use:
     MATCH (p:Entity {text: $name})-[r:RELATION]->(v:Entity)
     WHERE r.type IN ['FLED_IN', 'ESCAPED_ON', 'DROVE', 'PARKED']
-    RETURN v.text, r.type, r.fir
+    RETURN DISTINCT v.text, r.type, r.fir, r.source_span
 
 IMPORTANT: Vehicle descriptions like "white Hyundai i20" are stored with type 'unknown', NOT 'vehicle_number'. 
 vehicle_number type is only for registration plates like 'KA03AB1122'.
@@ -103,7 +103,12 @@ def query(question: str) -> dict:
                         temperature=0,
                         max_tokens=150
             )
-            sources = [r.get("source_span") or r.get("span") for r in results if r.get("source_span") or r.get("span")]
+            sources = []
+            for r in results:
+                span = r.get("source_span") or r.get("r.source_span") or r.get("span")
+                if span:
+                    sources.append(span)
+
             return {
                 "type": "GRAPH_QUERY",
                 "cypher": parsed["cypher"],
@@ -111,7 +116,8 @@ def query(question: str) -> dict:
                 "answer": summary_response.choices[0].message.content.strip(),
                 "sources": [s for s in sources if s]
             }
+        
         except Exception as e:
             return {"type": "error", "message": str(e)}
-
+        
     return parsed

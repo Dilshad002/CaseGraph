@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import axios from 'axios'
+import { useApp } from '../store/AppContext'
 
 const API = 'http://localhost:8000'
 
@@ -15,10 +16,12 @@ interface ExtractionResult {
 }
 
 export default function UploadPage() {
-  const [status, setStatus] = useState<Status>('idle')
-  const [result, setResult] = useState<ExtractionResult | null>(null)
+  const { lastUpload, setLastUpload } = useApp()
+  const [result, setResult] = useState<ExtractionResult | null>(lastUpload)
+  const [status, setStatus] = useState<Status>(lastUpload ? 'success' : 'idle')
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  
 
   const upload = async (file: File) => {
     setStatus('uploading')
@@ -29,6 +32,7 @@ export default function UploadPage() {
     try {
       const res = await axios.post(`${API}/extract`, form)
       setResult(res.data)
+      setLastUpload(res.data)
       setStatus('success')
     } catch (e: any) {
       setError(e.response?.data?.detail || 'Upload failed')

@@ -17,8 +17,8 @@ export default function App() {
     <BrowserRouter>
       <div className="flex h-screen bg-[#0D0F12] text-[#E8EAF0]">
         {/* Sidebar */}
-        <nav className="w-16 flex flex-col items-center py-6 gap-6 border-r border-[#2A2D35] bg-[#161920]">
-          <div className="w-8 h-8 rounded bg-[#4F8EF7] flex items-center justify-center text-xs font-mono font-bold text-white">CG</div>
+        <nav className="w-20 flex flex-col items-center py-6 gap-6 border-r border-[#2A2D35] bg-[#161920]">
+          <div className="w-11 h-10 flex items-center justify-center text-xs font-mono font-bold text-white">Case Graph</div>
           <div className="flex flex-col gap-4 mt-4">
             {navItems.map(({ to, icon: Icon, label }) => (
               <NavLink

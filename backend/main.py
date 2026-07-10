@@ -11,6 +11,7 @@ from backend.nlp.field_stripper import strip_field_labels
 from backend.reasoning.relation_extractor import extract_relationships, build_role_map
 from backend.reasoning.contradiction_detection import detect_contradictions
 from backend.assistant.query_engine import query as run_query
+from backend.graph.connection import get_session
 
 app = FastAPI(title="CaseGraph API")
 
@@ -74,6 +75,58 @@ async def extract(file: UploadFile = File(...)):
         "regex_entities": regex_entities,
         "relationships": relationships,
         }
+
+@app.get("/graph")
+def get_graph():
+    with get_session() as session:
+        nodes = {}
+        edges = []
+
+        # Case nodes
+        result = session.run("""
+        MATCH (c:Case)-[:MENTIONS]->(e:Entity)
+        WHERE e.type IN ['person', 'location', 'organization', 'vehicle_number', 'phone_number', 'facility', 'time', 'date']
+        RETURN DISTINCT e.text AS id, e.type AS type, c.fir_number AS fir
+        """)
+        for r in result:
+            nodes[r["id"]] = {"id": r["id"], "label": f"FIR {r['id']}", "type": "Case"}
+
+        # Entity nodes via MENTIONS
+        result = session.run("""
+            MATCH (c:Case)-[:MENTIONS]->(e:Entity)
+            RETURN DISTINCT e.text AS id, e.type AS type, c.fir_number AS fir
+        """)
+        for r in result:
+            if r["id"] not in nodes:
+                label = r["id"][:20] + "..." if len(r["id"]) > 20 else r["id"]
+                nodes[r["id"]] = {"id": r["id"], "label": label, "type": r["type"]}
+            edges.append({"source": r["fir"], "target": r["id"], "label": "MENTIONS", "type": "MENTIONS"})
+
+        # RELATION edges
+        result = session.run("""
+            MATCH (s:Entity)-[r:RELATION]->(o:Entity)
+            RETURN s.text AS source, o.text AS target, r.type AS type
+        """)
+        for r in result:
+            if r["source"] not in nodes:
+                nodes[r["source"]] = {"id": r["source"], "label": r["source"][:20], "type": "unknown"}
+            if r["target"] not in nodes:
+                nodes[r["target"]] = {"id": r["target"], "label": r["target"][:20], "type": "unknown"}
+            edges.append({"source": r["source"], "target": r["target"], "label": r["type"], "type": "RELATION"})
+
+        elements = [{"data": n} for n in nodes.values()]
+
+        seen_edges = set()
+        for e in edges:
+            edge_id = f"{e['source']}-{e['target']}-{e['label']}"
+            if edge_id in seen_edges:
+                continue
+            if e['source'] not in nodes or e['target'] not in nodes:
+                continue  # skip edges with missing nodes
+            seen_edges.add(edge_id)
+            elements.append({"data": {**e, "id": edge_id}})
+
+        return {"elements": elements}
 
 @app.get("/contradict")
 def contradictions(entity: str):

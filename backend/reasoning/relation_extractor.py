@@ -277,6 +277,8 @@ def verify_relationships(relationships: list[dict], source_text: str, role_map: 
         obj = resolve_role_reference(rel.get("object", ""), role_map)
         relation = rel.get("relation", "")
 
+        if len(relation) > 30: 
+            continue
         if ownership_hallucination_check(relation, span):
             continue
         if inference_hallucination_check(relation, span):
