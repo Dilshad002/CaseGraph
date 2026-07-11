@@ -60,6 +60,20 @@ export default function GraphPage() {
 
   const stylesheet: any[] = [
   {
+    selector: 'node',
+    style: {
+      'background-color': '#3A3D45',
+      'label': 'data(label)',
+      'color': '#E8EAF0',
+      'font-size': '10px',
+      'font-family': 'monospace',
+      'text-valign': 'bottom',
+      'text-margin-y': 4,
+      'width': 24,
+      'height': 24,
+    }
+  },
+  {
     selector: 'node[type="Case"]',
     style: { 'background-color': '#4F8EF7', 'width': 40, 'height': 40 }
   },
@@ -82,20 +96,6 @@ export default function GraphPage() {
   {
     selector: 'node[type="phone_number"]',
     style: { 'background-color': '#A78BFA' }
-  },
-  {
-    selector: 'node',
-    style: {
-      'background-color': '#3A3D45',
-      'label': 'data(label)',
-      'color': '#E8EAF0',
-      'font-size': '10px',
-      'font-family': 'monospace',
-      'text-valign': 'bottom',
-      'text-margin-y': 4,
-      'width': 24,
-      'height': 24,
-    }
   },
   {
     selector: 'edge',

@@ -78,22 +78,23 @@ async def extract(file: UploadFile = File(...)):
 
 @app.get("/graph")
 def get_graph():
+    from backend.graph.connection import get_session
     with get_session() as session:
         nodes = {}
         edges = []
 
+        ALLOWED_TYPES = {'person', 'location', 'vehicle_number', 'phone_number', 'facility'}
+
         # Case nodes
-        result = session.run("""
-        MATCH (c:Case)-[:MENTIONS]->(e:Entity)
-        WHERE e.type IN ['person', 'location', 'organization', 'vehicle_number', 'phone_number', 'facility', 'time', 'date']
-        RETURN DISTINCT e.text AS id, e.type AS type, c.fir_number AS fir
-        """)
+        result = session.run("MATCH (c:Case) RETURN c.fir_number AS fir_number, c.filename AS filename")
         for r in result:
-            nodes[r["id"]] = {"id": r["id"], "label": f"FIR {r['id']}", "type": "Case"}
+            fir = r["fir_number"]
+            nodes[fir] = {"id": fir, "label": f"FIR {fir}", "type": "Case"}
 
         # Entity nodes via MENTIONS
         result = session.run("""
             MATCH (c:Case)-[:MENTIONS]->(e:Entity)
+            WHERE e.type IN ['person', 'location', 'vehicle_number', 'phone_number', 'facility']
             RETURN DISTINCT e.text AS id, e.type AS type, c.fir_number AS fir
         """)
         for r in result:
@@ -102,17 +103,17 @@ def get_graph():
                 nodes[r["id"]] = {"id": r["id"], "label": label, "type": r["type"]}
             edges.append({"source": r["fir"], "target": r["id"], "label": "MENTIONS", "type": "MENTIONS"})
 
-        # RELATION edges
+        # RELATION edges — only between nodes already in our filtered set
         result = session.run("""
             MATCH (s:Entity)-[r:RELATION]->(o:Entity)
+            WHERE s.type IN ['person', 'location', 'vehicle_number', 'phone_number', 'facility']
+            OR o.type IN ['person', 'location', 'vehicle_number', 'phone_number', 'facility']
             RETURN s.text AS source, o.text AS target, r.type AS type
         """)
         for r in result:
-            if r["source"] not in nodes:
-                nodes[r["source"]] = {"id": r["source"], "label": r["source"][:20], "type": "unknown"}
-            if r["target"] not in nodes:
-                nodes[r["target"]] = {"id": r["target"], "label": r["target"][:20], "type": "unknown"}
-            edges.append({"source": r["source"], "target": r["target"], "label": r["type"], "type": "RELATION"})
+            # Only add relation if both nodes are already in our filtered set
+            if r["source"] in nodes and r["target"] in nodes:
+                edges.append({"source": r["source"], "target": r["target"], "label": r["type"], "type": "RELATION"})
 
         elements = [{"data": n} for n in nodes.values()]
 
@@ -122,12 +123,12 @@ def get_graph():
             if edge_id in seen_edges:
                 continue
             if e['source'] not in nodes or e['target'] not in nodes:
-                continue  # skip edges with missing nodes
+                continue
             seen_edges.add(edge_id)
             elements.append({"data": {**e, "id": edge_id}})
 
         return {"elements": elements}
-
+    
 @app.get("/contradict")
 def contradictions(entity: str):
     contradictions = detect_contradictions(entity)

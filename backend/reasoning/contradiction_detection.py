@@ -21,11 +21,11 @@ def times_overlap(start1: str, end1: str, start2: str, end2: str) -> bool:
     return s1 <= e2 and s2 <= e1
 
 def get_entity_appearances(entity_text: str) -> list[dict]:
-    #Get all cases that mention a specific entity.
     with get_session() as session:
         result = session.run(
             """
-            MATCH (c:Case)-[:MENTIONS]->(e:Entity {text: $text})
+            MATCH (c:Case)-[:MENTIONS]->(e:Entity)
+            WHERE toLower(e.text) = toLower($text)
             RETURN c.fir_number AS fir_number, c.filename AS filename, e.type AS entity_type
             """,
             text=entity_text
@@ -33,27 +33,24 @@ def get_entity_appearances(entity_text: str) -> list[dict]:
         return [dict(r) for r in result]
 
 def get_relations_for_entity(entity_text: str) -> list[dict]:
-    #Get all relationships where this entity is subject or object, across all cases.
     with get_session() as session:
         result = session.run(
             """
-            MATCH (s:Entity {text: $text})-[r:RELATION]->(o:Entity)
-            RETURN s.text AS subject, r.type AS relation, o.text AS object,
-                   r.source_span AS source_span, r.fir AS fir_number
-            UNION
-            MATCH (s:Entity)-[r:RELATION]->(o:Entity {text: $text})
+            MATCH (s:Entity)-[r:RELATION]->(o:Entity)
+            WHERE toLower(s.text) = toLower($text) OR toLower(o.text) = toLower($text)
             RETURN s.text AS subject, r.type AS relation, o.text AS object,
                    r.source_span AS source_span, r.fir AS fir_number
             """,
             text=entity_text
         )
         return [dict(r) for r in result]
-    
+
 def detect_attribute_contradictions(entity_text: str) -> list[dict]:
     with get_session() as session:
         result = session.run(
             """
-            MATCH (p:Entity {text: $name})-[r:HAS_ATTRIBUTE]->(a:Entity)
+            MATCH (p:Entity)-[r:HAS_ATTRIBUTE]->(a:Entity)
+            WHERE toLower(p.text) = toLower($name)
             RETURN r.attr AS attribute, a.text AS value, r.fir AS fir_number
             """,
             name=entity_text
@@ -143,16 +140,17 @@ def detect_temporal_spatial_contradictions(entity_text: str) -> list[dict]:
     with get_session() as session:
         result = session.run(
             """
-            MATCH (p:Entity {text: $name})-[:ACCUSED_IN]->(c1:Case)-[:INCIDENT_TIME]->(t1:TimeWindow),
-                  (c1)-[:INCIDENT_LOCATION]->(l1:Entity),
-                  (p)-[:ACCUSED_IN]->(c2:Case)-[:INCIDENT_TIME]->(t2:TimeWindow),
-                  (c2)-[:INCIDENT_LOCATION]->(l2:Entity)
-            WHERE c1.fir_number < c2.fir_number
+            MATCH (p:Entity)-[:ACCUSED_IN]->(c1:Case)-[:INCIDENT_TIME]->(t1:TimeWindow),
+                (c1)-[:INCIDENT_LOCATION]->(l1:Entity),
+                (p)-[:ACCUSED_IN]->(c2:Case)-[:INCIDENT_TIME]->(t2:TimeWindow),
+                (c2)-[:INCIDENT_LOCATION]->(l2:Entity)
+            WHERE toLower(p.text) = toLower($name)
+            AND c1.fir_number < c2.fir_number
             AND t1.date = t2.date
             AND l1.text <> l2.text
             RETURN c1.fir_number AS fir1, l1.text AS location1, t1.start AS start1, t1.end AS end1,
-                   c2.fir_number AS fir2, l2.text AS location2, t2.start AS start2, t2.end AS end2,
-                   t1.date AS date
+                c2.fir_number AS fir2, l2.text AS location2, t2.start AS start2, t2.end AS end2,
+                t1.date AS date
             """,
             name=entity_text
         )
