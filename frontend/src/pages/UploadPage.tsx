@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { Upload, FileText, CheckCircle, AlertCircle, Loader2, X } from 'lucide-react'
 import axios from 'axios'
 import { useApp } from '../store/AppContext'
 
@@ -16,12 +16,11 @@ interface ExtractionResult {
 }
 
 export default function UploadPage() {
-  const { lastUpload, setLastUpload } = useApp()
-  const [result, setResult] = useState<ExtractionResult | null>(lastUpload)
-  const [status, setStatus] = useState<Status>(lastUpload ? 'success' : 'idle')
+  const { uploadHistory, addUpload, removeUpload, clearHistory } = useApp()
+  const [result, setResult] = useState<ExtractionResult | null>(null)
+  const [status, setStatus] = useState<Status>('idle')
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
-  
 
   const upload = async (file: File) => {
     setStatus('uploading')
@@ -32,7 +31,7 @@ export default function UploadPage() {
     try {
       const res = await axios.post(`${API}/extract`, form)
       setResult(res.data)
-      setLastUpload(res.data)
+      addUpload(res.data)
       setStatus('success')
     } catch (e: any) {
       setError(e.response?.data?.detail || 'Upload failed')
@@ -93,7 +92,6 @@ export default function UploadPage() {
       {/* Results */}
       {status === 'success' && result && (
         <div className="mt-6 space-y-4">
-          {/* Header */}
           <div className="flex items-center gap-3">
             <CheckCircle className="text-[#4CAF84]" size={18} />
             <span className="font-mono text-sm text-[#4CAF84]">Extraction complete</span>
@@ -104,7 +102,6 @@ export default function UploadPage() {
             )}
           </div>
 
-          {/* Stats row */}
           <div className="grid grid-cols-3 gap-3">
             {[
               { label: 'Entities', value: result.entities.length },
@@ -118,7 +115,6 @@ export default function UploadPage() {
             ))}
           </div>
 
-          {/* Relationships */}
           {result.relationships.length > 0 && (
             <div className="bg-[#161920] border border-[#2A2D35] rounded-lg p-4">
               <p className="text-xs font-mono text-[#7A7F8E] uppercase tracking-widest mb-3">Relationships</p>
@@ -134,7 +130,6 @@ export default function UploadPage() {
             </div>
           )}
 
-          {/* Entities */}
           <div className="bg-[#161920] border border-[#2A2D35] rounded-lg p-4">
             <p className="text-xs font-mono text-[#7A7F8E] uppercase tracking-widest mb-3">Entities</p>
             <div className="flex flex-wrap gap-2">
@@ -150,6 +145,43 @@ export default function UploadPage() {
                   </span>
                 ))}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload History */}
+      {uploadHistory.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-mono text-[#7A7F8E] uppercase tracking-widest">Upload History</p>
+            <button
+              onClick={clearHistory}
+              className="text-xs font-mono text-[#7A7F8E] hover:text-[#E05252] transition-colors"
+            >
+              Clear all
+            </button>
+          </div>
+          <div className="space-y-2">
+            {uploadHistory.map((record) => (
+              <div key={record.filename} className="flex items-center justify-between bg-[#161920] border border-[#2A2D35] rounded-lg px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <FileText size={14} className="text-[#7A7F8E] flex-shrink-0" />
+                  <div>
+                    <p className="text-sm text-[#E8EAF0] font-mono">{record.filename}</p>
+                    <p className="text-xs text-[#7A7F8E]">
+                      {record.fir_number ? `FIR ${record.fir_number} · ` : ''}
+                      {record.entity_count} entities · {record.relationship_count} relations · {record.timestamp}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => removeUpload(record.filename)}
+                  className="text-[#7A7F8E] hover:text-[#E05252] transition-colors ml-4 flex-shrink-0"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
       )}
