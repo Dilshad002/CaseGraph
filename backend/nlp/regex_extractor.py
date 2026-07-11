@@ -26,10 +26,28 @@ ADDRESS_PATTERN = re.compile(
 )
 
 def extract_incident_details(text: str) -> dict:
-    date_match = re.search(r'Date of Occurrence:\s*(\d{1,2}/\d{1,2}/\d{4})', text, re.IGNORECASE)
-    time_match = re.search(r'Time\s*(?:of Occurrence)?:\s*(?:Between\s*)?(\d{1,2}:\d{2}\s*(?:AM|PM))\s*(?:and\s*(\d{1,2}:\d{2}\s*(?:AM|PM)))?', text, re.IGNORECASE)
-    place_match = re.search(r'Place of Occurrence:\s*(.+?)(?:\n\n|Description:|$)', text, re.DOTALL | re.IGNORECASE)
+    date_match = re.search(
+    r'(?:Date\s+of\s+(?:Occurrence|Incident)|Occurrence\s+Date)\s*:?\s*([0-9]{1,2}[/-][0-9]{1,2}[/-][0-9]{2,4})',
+    text,
+    re.IGNORECASE
+    )
 
+    time_match = re.search(
+    r'(?:Time(?:\s+of\s+Occurrence)?)\s*:?\s*(?:Between\s*)?'
+    r'(\d{1,2}[:.]\d{2}\s*(?:AM|PM)?)'
+    r'(?:\s*(?:and|to|-)\s*'
+    r'(\d{1,2}[:.]\d{2}\s*(?:AM|PM)?))?',
+    text,
+    re.IGNORECASE
+    )
+
+    place_match = re.search(
+    r'(?:Place\s+of\s+Occurrence|Place)\s*:?\s*(.+?)'
+    r'(?=\n\s*\n|\n[A-Z][^:\n]{1,40}:|Description:|$)',
+    text,
+    re.IGNORECASE | re.DOTALL
+    )
+    
     return {
         "date": date_match.group(1).strip() if date_match else None,
         "time_start": time_match.group(1).strip() if time_match else None,

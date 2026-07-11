@@ -2,7 +2,7 @@ from backend.graph.connection import get_session
 
 GLOBAL_TYPES = {
     "vehicle_number", "phone_number", "imei", "aadhaar",
-    "pan", "passport", "upi_id", "bank_account", "ifsc", 
+    "pan", "passport", "upi_id", "bank_account", "ifsc",
     "person"
 }
 
@@ -40,7 +40,6 @@ def create_case_node(case_id: str, filename: str, fir_number: str = None):
                 case_id=case_id, filename=filename
             )
 
-
 def create_entity_node(entity_text: str, entity_type: str, fir_number: str = None, filename: str = None):
     with get_session() as session:
         if fir_number:
@@ -66,7 +65,6 @@ def create_entity_node(entity_text: str, entity_type: str, fir_number: str = Non
             fir_number=fir_number, filename=filename, case_key=case_key
         )
 
-
 def write_extractions_to_graph(case_id: str, filename: str, entities: list, regex_entities: dict = None):
     fir_number = regex_entities.get("fir_number") if regex_entities else None
     create_case_node(case_id, filename, fir_number)
@@ -80,14 +78,12 @@ def write_extractions_to_graph(case_id: str, filename: str, entities: list, rege
         for vehicle in regex_entities.get("vehicle_numbers", []):
             create_entity_node(vehicle, "vehicle_number", fir_number, filename)
 
-
 def resolve_entity_type(entity_text: str, entities: list, default: str = "unknown") -> str:
     entity_lower = entity_text.lower().strip()
     for ent in entities:
         if ent["text"].lower().strip() == entity_lower:
             return ent["type"]
     return default
-
 
 def _create_relationship(tx, rel: dict, fir_number: str, filename: str, entities: list):
     subject_type = resolve_entity_type(rel["subject"], entities)
@@ -119,7 +115,7 @@ def _create_relationship(tx, rel: dict, fir_number: str, filename: str, entities
         fir_number=fir_number, case_key=case_key,
     )
 
-def write_incident_to_graph(fir_number: str, incident: dict, accused_name: str):
+def write_incident_to_graph(fir_number: str, incident: dict, accused_name: str = None, complainant_name: str = None):
     if not incident.get("date") or not incident.get("place"):
         return
     with get_session() as session:
@@ -146,7 +142,15 @@ def write_incident_to_graph(fir_number: str, incident: dict, accused_name: str):
                 """,
                 fir_number=fir_number, name=accused_name
             )
-
+        if complainant_name:
+            session.run(
+                """
+                MATCH (c:Case {fir_number: $fir_number})
+                MERGE (p:Entity {text: $name, type: 'person'})
+                MERGE (p)-[:COMPLAINANT_IN]->(c)
+                """,
+                fir_number=fir_number, name=complainant_name
+            )
 
 def write_relationships_to_graph(case_id: str, relationships: list, filename: str, entities: list, fir_number: str = None):
     with get_session() as session:

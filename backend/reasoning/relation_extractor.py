@@ -230,7 +230,6 @@ def extract_relationships(text: str, entity_texts: list[str]) -> list[dict]:
 
     try:
         relationships = json.loads(raw)
-        print("RAW:", relationships)
     except json.JSONDecodeError as e:
         print("PARSE FAILED:", e)
         print("RAW LLM OUTPUT:", raw)

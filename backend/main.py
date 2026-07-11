@@ -37,61 +37,64 @@ async def extract(file: UploadFile = File(...)):
         extracted_text = extract_text_from_image(contents)
 
     cleaned_text = clean_text(extracted_text)
-    regex_entities = extract_regex_entities(cleaned_text) #original text
+    regex_entities = extract_regex_entities(cleaned_text)
 
-    ner_input = strip_field_labels(cleaned_text)  #strip field labels from cleaned text before NER
-    entities = extract_entities(ner_input) 
+    ner_input = strip_field_labels(cleaned_text)
+    entities = extract_entities(ner_input)
     entities = strip_overlapping_ner_entities(entities, regex_entities)
 
     entity_texts = [e["text"] for e in entities] + \
         regex_entities.get("phone_numbers", []) + \
         regex_entities.get("vehicle_numbers", [])
-    
+
     relationships = extract_relationships(cleaned_text, entity_texts)
 
     case_id = str(uuid.uuid4())
+    fir_number = regex_entities.get("fir_number")
+    print(f"Extracted FIR number: {fir_number}")
+
     write_extractions_to_graph(case_id, file.filename, entities, regex_entities)
-    write_relationships_to_graph(case_id, relationships, file.filename, entities, regex_entities.get("fir_number"))
+    write_relationships_to_graph(case_id, relationships, file.filename, entities, fir_number)
 
     role_map = build_role_map(cleaned_text)
     person_attrs = extract_person_attributes(cleaned_text, role_map)
-    fir_number = regex_entities.get("fir_number")
 
     for p in person_attrs:
         write_person_attributes(p["name"], p["attributes"], fir_number, file.filename)
 
-    incident = extract_incident_details(cleaned_text)
     accused_name = None
+    complainant_name = None
     for name, data in role_map.items():
-        if "accused" in data.get("unambiguous", set()):
+        refs = data.get("unambiguous", set())
+        if "accused" in refs:
             accused_name = name
-            break
+        if "complainant" in refs:
+            complainant_name = name
+    print(f"Accused: {accused_name}, Complainant: {complainant_name}")
 
-    write_incident_to_graph(fir_number, incident, accused_name)
+    incident = extract_incident_details(cleaned_text)
+    print(f"Incident details: {incident.get('date')}, {incident.get('place')}")
+    write_incident_to_graph(fir_number, incident, accused_name, complainant_name)
 
-    return {"filename": file.filename,
+    return {
+        "filename": file.filename,
         "cleaned_text": cleaned_text,
         "entities": entities,
         "regex_entities": regex_entities,
         "relationships": relationships,
-        }
+    }
 
 @app.get("/graph")
 def get_graph():
-    from backend.graph.connection import get_session
     with get_session() as session:
         nodes = {}
         edges = []
 
-        ALLOWED_TYPES = {'person', 'location', 'vehicle_number', 'phone_number', 'facility'}
-
-        # Case nodes
         result = session.run("MATCH (c:Case) RETURN c.fir_number AS fir_number, c.filename AS filename")
         for r in result:
             fir = r["fir_number"]
             nodes[fir] = {"id": fir, "label": f"FIR {fir}", "type": "Case"}
 
-        # Entity nodes via MENTIONS
         result = session.run("""
             MATCH (c:Case)-[:MENTIONS]->(e:Entity)
             WHERE e.type IN ['person', 'location', 'vehicle_number', 'phone_number', 'facility']
@@ -103,7 +106,6 @@ def get_graph():
                 nodes[r["id"]] = {"id": r["id"], "label": label, "type": r["type"]}
             edges.append({"source": r["fir"], "target": r["id"], "label": "MENTIONS", "type": "MENTIONS"})
 
-        # RELATION edges — only between nodes already in our filtered set
         result = session.run("""
             MATCH (s:Entity)-[r:RELATION]->(o:Entity)
             WHERE s.type IN ['person', 'location', 'vehicle_number', 'phone_number', 'facility']
@@ -111,7 +113,6 @@ def get_graph():
             RETURN s.text AS source, o.text AS target, r.type AS type
         """)
         for r in result:
-            # Only add relation if both nodes are already in our filtered set
             if r["source"] in nodes and r["target"] in nodes:
                 edges.append({"source": r["source"], "target": r["target"], "label": r["type"], "type": "RELATION"})
 
@@ -128,11 +129,46 @@ def get_graph():
             elements.append({"data": {**e, "id": edge_id}})
 
         return {"elements": elements}
-    
+
+@app.delete("/case")
+def delete_case(fir_number: str):
+    with get_session() as session:
+        session.run(
+            """
+            MATCH (c:Case {fir_number: $fir_number})
+            DETACH DELETE c
+            """,
+            fir_number=fir_number
+        )
+        session.run(
+            """
+            MATCH (e:Entity)
+            WHERE NOT EXISTS {
+                MATCH (c:Case)-[:MENTIONS]->(e)
+            }
+            AND NOT EXISTS {
+                MATCH (e)-[:ACCUSED_IN]->(:Case)
+            }
+            AND NOT EXISTS {
+                MATCH (e)-[:COMPLAINANT_IN]->(:Case)
+            }
+            DETACH DELETE e
+            """
+        )
+        session.run(
+            """
+            MATCH (t:TimeWindow)
+            WHERE NOT EXISTS {
+                MATCH ()-[:INCIDENT_TIME]->(t)
+            }
+            DELETE t
+            """
+        )
+    return {"deleted": fir_number}
+
 @app.get("/contradict")
 def contradictions(entity: str):
-    contradictions = detect_contradictions(entity)
-    return contradictions
+    return detect_contradictions(entity)
 
 @app.get("/query")
 def query_endpoint(question: str):

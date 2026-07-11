@@ -15,12 +15,21 @@ interface ExtractionResult {
   relationships: { subject: string; relation: string; object: string }[]
 }
 
+interface UploadRecord {
+  filename: string
+  fir_number: string | null
+  entity_count: number
+  relationship_count: number
+  timestamp: string
+}
+
 export default function UploadPage() {
   const { uploadHistory, addUpload, removeUpload, clearHistory } = useApp()
   const [result, setResult] = useState<ExtractionResult | null>(null)
   const [status, setStatus] = useState<Status>('idle')
   const [error, setError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   const upload = async (file: File) => {
     setStatus('uploading')
@@ -38,6 +47,21 @@ export default function UploadPage() {
       setStatus('error')
     }
   }
+
+  const handleRemove = async (record: UploadRecord) => {
+  setDeleting(record.filename)
+  if (record.fir_number) {
+    try {
+      await axios.delete(`${API}/case`, { 
+        params: { fir_number: record.fir_number } 
+      })
+    } catch (e) {
+      console.error('Failed to delete from graph:', e)
+    }
+  }
+  removeUpload(record.filename)
+  setDeleting(null)
+}
 
   const onDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -175,11 +199,15 @@ export default function UploadPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => removeUpload(record.filename)}
-                  className="text-[#7A7F8E] hover:text-[#E05252] transition-colors ml-4 flex-shrink-0"
-                >
-                  <X size={14} />
-                </button>
+                onClick={() => handleRemove(record)}
+                disabled={deleting === record.filename}
+                className="text-[10px] text-[#7A7F8E] hover:text-[#E05252] transition-colors flex items-center gap-1 flex-shrink-0 disabled:opacity-50"
+              >
+                REMOVE
+                {deleting === record.filename && (
+                  <Loader2 size={12} className="animate-spin" />
+                )}
+              </button>
               </div>
             ))}
           </div>
