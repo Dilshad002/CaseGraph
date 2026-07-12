@@ -3,7 +3,7 @@ name = "casegraph"
 version = "0.1.0"
 description = "AI-powered criminal investigation support system"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
     "en-core-web-md",
     "fastapi>=0.138.2",
