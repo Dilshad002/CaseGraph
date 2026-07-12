@@ -1,4 +1,5 @@
 import re
+import json
 
 PHONE_PATTERN = re.compile(r"(?:\+91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}")
 VEHICLE_PATTERN = re.compile(r'\b[A-Z]{2}[\s\-]?\d{1,2}[\s\-]?[A-Z]{1,3}[\s\-]?\d{4}\b')
@@ -24,36 +25,6 @@ ADDRESS_PATTERN = re.compile(
     r'(?:Accused|Complainant)\s+Details.*?Address:\s*(.+?)(?:Mobile:|Email:|Aadhaar:|$)',
     re.DOTALL | re.IGNORECASE
 )
-
-def extract_incident_details(text: str) -> dict:
-    date_match = re.search(
-    r'(?:Date\s+of\s+(?:Occurrence|Incident)|Occurrence\s+Date)\s*:?\s*([0-9]{1,2}[/-][0-9]{1,2}[/-][0-9]{2,4})',
-    text,
-    re.IGNORECASE
-    )
-
-    time_match = re.search(
-    r'(?:Time(?:\s+of\s+Occurrence)?)\s*:?\s*(?:Between\s*)?'
-    r'(\d{1,2}[:.]\d{2}\s*(?:AM|PM)?)'
-    r'(?:\s*(?:and|to|-)\s*'
-    r'(\d{1,2}[:.]\d{2}\s*(?:AM|PM)?))?',
-    text,
-    re.IGNORECASE
-    )
-
-    place_match = re.search(
-    r'(?:Place\s+of\s+Occurrence|Place)\s*:?\s*(.+?)'
-    r'(?=\n\s*\n|\n[A-Z][^:\n]{1,40}:|Description:|$)',
-    text,
-    re.IGNORECASE | re.DOTALL
-    )
-    
-    return {
-        "date": date_match.group(1).strip() if date_match else None,
-        "time_start": time_match.group(1).strip() if time_match else None,
-        "time_end": time_match.group(2).strip() if time_match and time_match.group(2) else None,
-        "place": ' '.join(place_match.group(1).strip().split()) if place_match else None
-    }
 
 def extract_description_section(text: str) -> str:
     match = re.search(r'Description:\s*(.+?)(?:Witnesses|Recovered Evidence|Investigating Officer|$)',
@@ -192,3 +163,42 @@ def extract_regex_entities(text: str) -> dict:
         "bank_accounts": extract_bank_accounts(text),
         "driving_licences": extract_driving_licences(text)
     }
+    
+def extract_incident_details_llm(text: str, client, model: str) -> dict:
+    # Get incident section - more context than just description
+    incident_match = re.search(
+        r'Incident\s*(?:Details)?\s*:?\s*(.*?)(?:Witnesses|Recovered Evidence|Investigating Officer|$)',
+        text, re.DOTALL | re.IGNORECASE
+    )
+    if incident_match:
+        context = incident_match.group(1).strip()[:3000]
+    else:
+        context = text[:3000]
+
+    prompt = f"""Extract incident details from this criminal case text. Return ONLY a JSON object with these exact keys:
+- date: date of occurrence in DD/MM/YYYY format, or null
+- time_start: start time in HH:MM AM/PM format, or null
+- time_end: end time in HH:MM AM/PM format, or null
+- place: place/location of occurrence as a short string, or null
+
+Text:
+{context}
+
+Return only the JSON object, nothing else."""
+
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=150
+        )
+        raw = response.choices[0].message.content.strip()
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        if start == -1:
+            return {"date": None, "time_start": None, "time_end": None, "place": None}
+        return json.loads(raw[start:end])
+    except Exception as e:
+        print(f"Incident LLM extraction failed: {e}")
+        return {"date": None, "time_start": None, "time_end": None, "place": None}

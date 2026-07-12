@@ -116,23 +116,35 @@ def _create_relationship(tx, rel: dict, fir_number: str, filename: str, entities
     )
 
 def write_incident_to_graph(fir_number: str, incident: dict, accused_name: str = None, complainant_name: str = None):
-    if not incident.get("date") or not incident.get("place"):
+    if not fir_number:
         return
+    
     with get_session() as session:
-        session.run(
-            """
-            MATCH (c:Case {fir_number: $fir_number})
-            MERGE (l:Entity {text: $place, type: 'location'})
-            MERGE (t:TimeWindow {date: $date, start: $time_start, end: $time_end, fir: $fir_number})
-            MERGE (c)-[:INCIDENT_LOCATION]->(l)
-            MERGE (c)-[:INCIDENT_TIME]->(t)
-            """,
-            fir_number=fir_number,
-            place=incident["place"],
-            date=incident["date"],
-            time_start=incident.get("time_start", ""),
-            time_end=incident.get("time_end", "")
-        )
+        # Only write location and time if we have the data
+        if incident.get("place"):
+            session.run(
+                """
+                MATCH (c:Case {fir_number: $fir_number})
+                MERGE (l:Entity {text: $place, type: 'location'})
+                MERGE (c)-[:INCIDENT_LOCATION]->(l)
+                """,
+                fir_number=fir_number,
+                place=incident["place"]
+            )
+
+        if incident.get("date") and incident.get("place"):
+            session.run(
+                """
+                MATCH (c:Case {fir_number: $fir_number})
+                MERGE (t:TimeWindow {date: $date, start: $time_start, end: $time_end, fir: $fir_number})
+                MERGE (c)-[:INCIDENT_TIME]->(t)
+                """,
+                fir_number=fir_number,
+                date=incident["date"],
+                time_start=incident.get("time_start") or "",
+                time_end=incident.get("time_end") or ""
+            )
+
         if accused_name:
             session.run(
                 """
@@ -142,6 +154,7 @@ def write_incident_to_graph(fir_number: str, incident: dict, accused_name: str =
                 """,
                 fir_number=fir_number, name=accused_name
             )
+
         if complainant_name:
             session.run(
                 """

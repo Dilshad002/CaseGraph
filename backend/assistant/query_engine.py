@@ -36,6 +36,19 @@ IMPORTANT: Vehicle descriptions like "white Hyundai i20" are stored with type 'u
 vehicle_number type is only for registration plates like 'KA03AB1122'.
 When querying for vehicles linked to a person via FLED_IN, ESCAPED_ON etc, do NOT filter by type.
 
+When querying both accused and complainant in the same query, use two separate MATCH clauses, NOT UNION:
+MATCH (accused:Entity)-[:ACCUSED_IN]->(c:Case {fir_number: '203/2026'})
+MATCH (complainant:Entity)-[:COMPLAINANT_IN]->(c)
+RETURN accused.text AS accused, complainant.text AS complainant
+
+When querying vehicles linked to a person, do NOT filter by entity type since some persons may be misclassified:
+MATCH (e:Entity)-[r:RELATION]->(v:Entity)
+WHERE toLower(e.text) = toLower('person name')
+AND r.type IN ['FLED_IN', 'ESCAPED_ON', 'DROVE', 'PARKED', 'FLED_ON', 'ESCAPED_IN']
+RETURN DISTINCT v.text, r.type, r.fir, r.source_span
+
+If UNION is needed, all branches must return the same column names.
+
 To find the complainant in a FIR, use:
 MATCH (e:Entity)-[:COMPLAINANT_IN]->(c:Case {fir_number: $fir})
 RETURN e.text AS complainant

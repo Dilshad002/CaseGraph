@@ -5,13 +5,15 @@ from backend.ingestion.ocr import extract_text_from_image
 from backend.ingestion.cleaner import clean_text
 from backend.ingestion.pdf_extractor import extract_text_from_pdf
 from backend.nlp.ner import extract_entities
-from backend.nlp.regex_extractor import extract_regex_entities, strip_overlapping_ner_entities, extract_person_attributes, extract_incident_details
+from backend.nlp.regex_extractor import extract_regex_entities, strip_overlapping_ner_entities, extract_person_attributes
 from backend.graph.writer import write_extractions_to_graph, write_relationships_to_graph, write_person_attributes, write_incident_to_graph
 from backend.nlp.field_stripper import strip_field_labels
 from backend.reasoning.relation_extractor import extract_relationships, build_role_map
 from backend.reasoning.contradiction_detection import detect_contradictions
 from backend.assistant.query_engine import query as run_query
 from backend.graph.connection import get_session
+from backend.assistant.query_engine import client as groq_client
+from backend.nlp.regex_extractor import extract_incident_details_llm
 
 app = FastAPI(title="CaseGraph API")
 
@@ -72,8 +74,8 @@ async def extract(file: UploadFile = File(...)):
             complainant_name = name
     print(f"Accused: {accused_name}, Complainant: {complainant_name}")
 
-    incident = extract_incident_details(cleaned_text)
-    print(f"Incident details: {incident.get('date')}, {incident.get('place')}")
+    incident = extract_incident_details_llm(cleaned_text, groq_client, "llama-3.3-70b-versatile")
+    print(f"INCIDENT LLM: {incident}")
     write_incident_to_graph(fir_number, incident, accused_name, complainant_name)
 
     return {
