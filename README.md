@@ -6,6 +6,8 @@ CaseGraph augments human investigators by eliminating manual evidence correlatio
 
 ---
 
+![CaseGraph Homepage](assets/cg-home.png)
+
 ## Problem
 
 Criminal investigations involve large volumes of heterogeneous evidence — FIRs, witness statements, call logs, forensic reports. Investigators manually cross-reference this across documents, which is slow, error-prone, and misses connections that span multiple cases.
