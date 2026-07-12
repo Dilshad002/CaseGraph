@@ -288,7 +288,7 @@ uv run pytest tests/ -v
 - Groq free tier has a 100k token/day limit. Uploading many large documents in a single session may exhaust the limit and cause relation extraction to return empty results silently.
 - Relation names extracted by the LLM are not normalized — `FLED_IN` and `ESCAPED_ON` are treated as different relation types even if semantically equivalent. Contradiction detection on relation type requires exact string match.
 - The query engine generates Cypher via LLM. Complex or ambiguous queries may produce invalid Cypher; errors are returned to the user with the raw message.
-- No authentication or access control — suitable for local development and demo use only.
+- API key authentication is implemented but the key is transmitted in plaintext via HTTP headers. Suitable for local use only. Production deployment requires JWT-based authentication over HTTPS.
 - FIR number deduplication uses regex extraction. Documents without a recognizable FIR number format fall back to filename-based deduplication.
 
 ---

@@ -1,9 +1,9 @@
 [project]
 name = "casegraph"
 version = "0.1.0"
-description = "Add your description here"
+description = "AI-powered criminal investigation support system"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 dependencies = [
     "en-core-web-md",
     "fastapi>=0.138.2",
@@ -15,6 +15,7 @@ dependencies = [
     "python-multipart>=0.0.32",
     "spacy>=3.8.13",
     "uvicorn>=0.49.0",
+    "pillow>=11.0.0",
 ]
 
 [tool.uv.sources]
