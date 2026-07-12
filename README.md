@@ -23,7 +23,7 @@ Existing case management tools store and retrieve evidence. They do not reason o
 - Builds a temporal knowledge graph in Neo4j connecting entities across documents
 - Detects contradictions across FIRs: attribute conflicts (age, mobile), relation conflicts (fled in different vehicles), temporal-spatial conflicts (same person at two locations during overlapping time windows)
 - Answers natural language queries with graph-backed Cypher and source attribution
-- Provides a dark forensic-themed React dashboard with graph visualization
+- Provides a React dashboard with graph visualization
 
 ---
 
