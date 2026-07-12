@@ -31,65 +31,7 @@ Existing case management tools store and retrieve evidence. They do not reason o
 
 ## Architecture
 
-```
-                        Evidence Upload (PDF / Image)
-                                    │
-                    ┌───────────────┼───────────────┐
-                    │                               │
-              PDF Extraction                   OCR (Tesseract)
-              (PyMuPDF)                             │
-                    └───────────────┬───────────────┘
-                                    │
-                              Text Cleaning
-                          (Unicode, whitespace,
-                           field label stripping)
-                                    │
-                    ┌───────────────┼───────────────┐
-                    │                               │
-             Regex Extraction                spaCy NER
-          (11 identifier types)         (persons, locations,
-                    │                    orgs, times, dates)
-                    └───────────────┬───────────────┘
-                                    │
-                         Deduplication & Overlap
-                              Stripping
-                                    │
-                    ┌───────────────┼───────────────┐
-                    │                               │
-             LLM Relation               Person Attribute
-             Extraction                  Extraction
-          (Groq / llama-3.3)          (age, mobile from
-          with hallucination            structured fields)
-              guards                        │
-                    │                       │
-                    └───────────────┬───────────────┘
-                                    │
-                              Neo4j Graph
-                         ┌──────────────────┐
-                         │  Case Nodes       │
-                         │  Entity Nodes     │
-                         │  MENTIONS edges   │
-                         │  RELATION edges   │
-                         │  HAS_ATTRIBUTE    │
-                         │  ACCUSED_IN       │
-                         │  COMPLAINANT_IN   │
-                         │  INCIDENT_TIME    │
-                         │  INCIDENT_LOCATION│
-                         └──────────────────┘
-                                    │
-                    ┌───────────────┼───────────────┐
-                    │               │               │
-            Contradiction      Natural Language    Graph
-             Detection          Query Engine    Visualization
-          (attribute,          (LLM → Cypher →  (Cytoscape.js)
-           relation,            Answer + Source
-           temporal-spatial)    Attribution)
-                    │               │               │
-                    └───────────────┴───────────────┘
-                                    │
-                           React Frontend
-                    (Upload · Graph · Contradictions · Query)
-```
+![CaseGraph Homepage](assets/cg-architecture.svg)
 
 ---
 
