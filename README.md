@@ -284,12 +284,9 @@ uv run pytest tests/ -v
 ## Known Limitations
 
 - spaCy `en_core_web_md` occasionally misclassifies entity types (e.g. organization names tagged as persons). The dedicated regex extractor is the source of truth for structured identifiers — phone numbers, vehicle plates, and other identifiers extracted by regex take precedence over NER output.
-- OCR may misread currency symbols (₹) as leading digits. Manual verification recommended for financial figures in scanned documents.
-- Groq free tier has a 100k token/day limit. Uploading many large documents in a single session may exhaust the limit and cause relation extraction to return empty results silently.
 - Relation names extracted by the LLM are not normalized — `FLED_IN` and `ESCAPED_ON` are treated as different relation types even if semantically equivalent. Contradiction detection on relation type requires exact string match.
 - The query engine generates Cypher via LLM. Complex or ambiguous queries may produce invalid Cypher; errors are returned to the user with the raw message.
 - API key authentication is implemented but the key is transmitted in plaintext via HTTP headers. Suitable for local use only. Production deployment requires JWT-based authentication over HTTPS.
-- FIR number deduplication uses regex extraction. Documents without a recognizable FIR number format fall back to filename-based deduplication.
 
 ---
 
