@@ -1,8 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import CytoscapeComponent from 'react-cytoscapejs'
-import axios from 'axios'
-
-const API = 'http://localhost:8000'
+import api from '../lib/api'
 
 const NODE_COLORS: Record<string, string> = {
   Case: '#4F8EF7',
@@ -43,7 +41,7 @@ export default function GraphPage() {
   const fetchGraph = async () => {
     setLoading(true)
     try {
-      const res = await axios.get(`${API}/graph`)
+      const res = await api.get(`/graph`)
       setElements(res.data.elements || [])
     } catch {
       setElements([])

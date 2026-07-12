@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, Loader2, Database, MessageSquare } from 'lucide-react'
-import axios from 'axios'
-
-const API = 'http://localhost:8000'
+import api from '../lib/api'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -30,7 +28,7 @@ export default function QueryPage() {
     setLoading(true)
 
     try {
-      const res = await axios.get(`${API}/query`, { params: { question: input } })
+      const res = await api.get(`/query`, { params: { question: input } })
       const data = res.data
       const assistantMsg: Message = {
         role: 'assistant',

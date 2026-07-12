@@ -1,233 +1,311 @@
 # CaseGraph
 
-CaseGraph extracts structured information from First Information Reports (FIRs) and writes it into a Neo4j knowledge graph. It combines OCR/PDF text extraction, NER, regex-based structured field extraction, and LLM-based relationship extraction to turn unstructured police report text into a queryable graph of entities and their relationships.
+An AI-powered criminal investigation support system that ingests FIR documents, extracts entities and relationships, builds a temporal knowledge graph, detects contradictions across sources, and provides explainable investigative insights via natural language queries.
 
-**Status: Work in progress.** Core extraction and graph-write pipelines are functional and tested. Currently in active development: contradiction detection across relationships and documents.
-
----
-
-## What it does
-
-1. Accepts a FIR as a PDF or image upload.
-2. Extracts raw text via PyMuPDF (PDF) or Tesseract OCR (image).
-3. Cleans and normalizes the extracted text.
-4. Runs spaCy NER to identify entities (people, organizations, locations, etc.).
-5. Runs regex extraction for structured identifiers (phone numbers, vehicle registrations, IMEI, Aadhaar, PAN, IFSC, UPI IDs, bank accounts, passport numbers).
-6. Sends the cleaned text to a Groq-hosted Llama 3.3 70B model to extract factual relationships between entities (e.g., `PARKED`, `FLED_IN`, `CARRIED`, `REPORTED_STOLEN`, `CONFRONTED`).
-7. Verifies each extracted relationship against the source text — checking that the stated relation type is lexically supported by the span, that subject/object are actually grounded in the span (including role-reference resolution, e.g. "the accused" → the accused's name), and that the span is a verbatim substring of the source document.
-8. Writes verified entities and relationships to a Neo4j graph, scoped per case.
+CaseGraph augments human investigators by eliminating manual evidence correlation. Every output is traceable back to its source document. No black-box conclusions.
 
 ---
 
-## Tech stack
+## Problem
 
-- **API**: FastAPI
-- **PDF/OCR**: PyMuPDF, pytesseract
-- **NLP**: spaCy (`en_core_web_sm`)
-- **Relationship extraction**: Groq API, Llama 3.3 70B
-- **Graph database**: Neo4j
-- **Dependency management**: uv
+Criminal investigations involve large volumes of heterogeneous evidence — FIRs, witness statements, call logs, forensic reports. Investigators manually cross-reference this across documents, which is slow, error-prone, and misses connections that span multiple cases.
+
+Existing case management tools store and retrieve evidence. They do not reason over it.
+
+---
+
+## What CaseGraph Does
+
+- Ingests scanned documents via OCR and digital PDFs
+- Extracts 11 types of structured identifiers (phone, vehicle, IMEI, Aadhaar, PAN, IFSC, UPI, bank account, passport, driving licence, FIR number) using regex
+- Extracts named entities (persons, locations, organizations, times) using spaCy NER
+- Extracts relationships from narrative text using an LLM with hallucination guards
+- Builds a temporal knowledge graph in Neo4j connecting entities across documents
+- Detects contradictions across FIRs: attribute conflicts (age, mobile), relation conflicts (fled in different vehicles), temporal-spatial conflicts (same person at two locations during overlapping time windows)
+- Answers natural language queries with graph-backed Cypher and source attribution
+- Provides a dark forensic-themed React dashboard with graph visualization
+
+---
+
+## Architecture
+
+```
+                        Evidence Upload (PDF / Image)
+                                    │
+                    ┌───────────────┼───────────────┐
+                    │                               │
+              PDF Extraction                   OCR (Tesseract)
+              (PyMuPDF)                             │
+                    └───────────────┬───────────────┘
+                                    │
+                              Text Cleaning
+                          (Unicode, whitespace,
+                           field label stripping)
+                                    │
+                    ┌───────────────┼───────────────┐
+                    │                               │
+             Regex Extraction                spaCy NER
+          (11 identifier types)         (persons, locations,
+                    │                    orgs, times, dates)
+                    └───────────────┬───────────────┘
+                                    │
+                         Deduplication & Overlap
+                              Stripping
+                                    │
+                    ┌───────────────┼───────────────┐
+                    │                               │
+             LLM Relation               Person Attribute
+             Extraction                  Extraction
+          (Groq / llama-3.3)          (age, mobile from
+          with hallucination            structured fields)
+              guards                        │
+                    │                       │
+                    └───────────────┬───────────────┘
+                                    │
+                              Neo4j Graph
+                         ┌──────────────────┐
+                         │  Case Nodes       │
+                         │  Entity Nodes     │
+                         │  MENTIONS edges   │
+                         │  RELATION edges   │
+                         │  HAS_ATTRIBUTE    │
+                         │  ACCUSED_IN       │
+                         │  COMPLAINANT_IN   │
+                         │  INCIDENT_TIME    │
+                         │  INCIDENT_LOCATION│
+                         └──────────────────┘
+                                    │
+                    ┌───────────────┼───────────────┐
+                    │               │               │
+            Contradiction      Natural Language    Graph
+             Detection          Query Engine    Visualization
+          (attribute,          (LLM → Cypher →  (Cytoscape.js)
+           relation,            Answer + Source
+           temporal-spatial)    Attribution)
+                    │               │               │
+                    └───────────────┴───────────────┘
+                                    │
+                           React Frontend
+                    (Upload · Graph · Contradictions · Query)
+```
+
+---
+
+## Graph Schema
+
+```
+(Case {fir_number, filename, id})
+(Entity {text, type, case_key})
+(TimeWindow {date, start, end, fir})
+
+(Case)-[:MENTIONS]->(Entity)
+(Entity)-[:RELATION {type, fir, source_span}]->(Entity)
+(Entity)-[:HAS_ATTRIBUTE {fir, attr}]->(Entity)
+(Entity)-[:ACCUSED_IN]->(Case)
+(Entity)-[:COMPLAINANT_IN]->(Case)
+(Case)-[:INCIDENT_TIME]->(TimeWindow)
+(Case)-[:INCIDENT_LOCATION]->(Entity)
+```
+
+Entity types: `person`, `location`, `organization`, `vehicle_number`, `phone_number`, `facility`, `date`, `time`
+
+Global entity types (shared across FIRs for cross-case linking): `person`, `vehicle_number`, `phone_number`, `imei`, `aadhaar`, `pan`, `passport`, `upi_id`, `bank_account`, `ifsc`
+
+---
+
+## Contradiction Detection
+
+Three types of contradiction are detected on-demand across FIRs:
+
+**Attribute conflicts** — same person with different age or mobile number across FIRs.
+```
+Vikram Reddy: age 34 (FIR 145/2026) vs age 32 (FIR 152/2026)
+Vikram Reddy: mobile 9123456789 (FIR 145/2026) vs 9876501234 (FIR 178/2026)
+```
+
+**Relation conflicts** — same person, same relation type, different object across FIRs.
+```
+Vikram Reddy FLED_IN Hyundai i20 (FIR 145/2026)
+Vikram Reddy FLED_IN Mahindra Thar (FIR 178/2026)
+```
+Every conflict includes the exact source span from the original document.
+
+**Temporal-spatial conflicts** — same person placed at two different locations during overlapping time windows on the same date.
+```
+Vikram Reddy at Phoenix Marketcity, 08:15–08:45 PM (FIR 145/2026)
+Vikram Reddy at Indiranagar, 08:20–08:40 PM (FIR 152/2026)
+Date: 28/06/2026
+```
+
+---
+
+## Query Interface
+
+Natural language queries are translated to Cypher by an LLM, executed against the graph, and summarized back in plain English. Every answer includes the Cypher query used (source attribution) and relevant source spans where available.
+
+Example queries:
+- `Who are all accused persons across all FIRs?`
+- `What vehicles are linked to Vikram Reddy?`
+- `Which phone numbers appear in more than one FIR?`
+- `Summarize FIR 145/2026`
+- `Who is the complainant in FIR 203/2026?`
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Backend | FastAPI |
+| OCR | Tesseract (pytesseract) |
+| PDF extraction | PyMuPDF (fitz) |
+| NLP / NER | spaCy (`en_core_web_md`) |
+| LLM | Groq (`llama-3.3-70b-versatile`) |
+| Graph database | Neo4j 5 |
+| Frontend | React + TypeScript |
+| Graph visualization | Cytoscape.js (react-cytoscapejs) |
+| UI components | shadcn/ui (Radix, Nova preset) |
+| Styling | Tailwind CSS v4 |
+| HTTP client | Axios |
+| Routing | React Router |
+| Package manager (Python) | uv |
+| Package manager (JS) | npm |
+
+---
+
+## Project Structure
+
+```
+CaseGraph/
+├── backend/
+│   ├── main.py                         # FastAPI app, all endpoints
+│   ├── ingestion/
+│   │   ├── ocr.py                      # Tesseract OCR
+│   │   ├── pdf_extractor.py            # PyMuPDF text extraction
+│   │   └── cleaner.py                  # Text normalization
+│   ├── nlp/
+│   │   ├── ner.py                      # spaCy NER pipeline
+│   │   ├── regex_extractor.py          # 11-type identifier extraction
+│   │   └── field_stripper.py           # Section header removal before NER
+│   ├── graph/
+│   │   ├── connection.py               # Neo4j driver
+│   │   └── writer.py                   # Graph write operations
+│   ├── reasoning/
+│   │   ├── relation_extractor.py       # LLM relation extraction with guards
+│   │   └── contradiction_detection.py  # Cross-FIR contradiction detection
+│   └── assistant/
+│       └── query_engine.py             # NL → Cypher → Answer pipeline
+├── frontend/
+│   └── src/
+│       ├── App.tsx                     # Layout, routing, sidebar
+│       ├── pages/
+│       │   ├── UploadPage.tsx          # Document upload + extraction results
+│       │   ├── GraphPage.tsx           # Cytoscape knowledge graph
+│       │   ├── ContradictionsPage.tsx  # Contradiction search + display
+│       │   └── QueryPage.tsx           # Chat-style query interface
+│       └── store/
+│           └── AppContext.tsx          # Upload history state
+├── tests/
+│   ├── test_nlp.py
+│   ├── test_extractors.py
+│   ├── test_contradiction.py
+│   └── test_query_engine.py
+├── pyproject.toml
+└── README.md
+```
+
+---
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/health` | Service health check |
+| POST | `/extract` | Upload document, extract entities, write to graph |
+| GET | `/graph` | Fetch all nodes and edges for visualization |
+| GET | `/contradict?entity=` | Detect contradictions for a named entity |
+| GET | `/query?question=` | Natural language query over graph |
+| DELETE | `/case?fir_number=` | Delete a case and orphaned entities |
 
 ---
 
 ## Setup
 
-### Requirements
+### Prerequisites
 
-- Python >= 3.14
-- A running Neo4j instance
-- A Groq API key ([console.groq.com](https://console.groq.com))
-- Tesseract OCR installed on your system (required by `pytesseract`)
+- Python 3.11+
+- Node.js 18+
+- [uv](https://github.com/astral-sh/uv)
+- Tesseract OCR (system package)
+- Neo4j 5 (native install or Docker)
+- Groq API key — free tier at [console.groq.com](https://console.groq.com)
 
-### Install dependencies
-
-This project uses [uv](https://docs.astral.sh/uv/) for dependency management.
-
-```bash
-uv sync
-```
-
-This installs all dependencies listed in `pyproject.toml`, including the spaCy `en_core_web_sm` model.
-
-### Environment variables
-
-Copy `.env.example` to `.env` and fill in your values:
+### Backend
 
 ```bash
+git clone https://github.com/Dilshad002/casegraph.git
+cd casegraph
+
+uv add fastapi uvicorn python-multipart pytesseract pillow pymupdf spacy groq neo4j python-dotenv
+uv add https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+
+# Ubuntu/Debian
+sudo apt install tesseract-ocr
+
 cp .env.example .env
-```
+# Set GROQ_API_KEY, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
 
-```
-GROQ_API_KEY=your_groq_api_key_here
-
-NEO4J_URI=bolt://localhost:7687
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=your_password_here
-```
-
-### Run Neo4j
-
-Point `NEO4J_URI` at any running Neo4j instance (local Desktop install, Docker, or Aura). Default local bolt port is `7687`; Neo4j Browser is typically at `http://localhost:7474`.
-
-### Run the API
-
-```bash
+sudo systemctl start neo4j
 uvicorn backend.main:app --reload
 ```
 
-The API will be available at `http://localhost:8000`.
-
----
-
-## API
-
-### `GET /health`
-
-Health check.
+### Frontend
 
 ```bash
-curl http://localhost:8000/health
+cd frontend
+npm install
+npm run dev
 ```
 
-```json
-{"status": "healthy"}
-```
+Frontend at `http://localhost:5173` · API at `http://localhost:8000`
 
-### `POST /extract`
+---
 
-Upload a FIR (PDF or image) for extraction and graph write.
+## Tests
 
 ```bash
-curl -X POST "http://localhost:8000/extract" \
-  -F "file=@/path/to/fir.pdf"
+uv run pytest tests/ -v
 ```
 
-**Response:**
-
-```json
-{
-  "filename": "fir1.pdf",
-  "cleaned_text": "...",
-  "entities": [
-    {"text": "Rohan Kumar", "type": "person", "original_label": "PERSON"}
-  ],
-  "regex_entities": {
-    "phone_numbers": ["9876543210"],
-    "vehicle_numbers": ["KA01MN4589"],
-    "fir_number": "145/2026",
-    "imei_numbers": [],
-    "aadhaar_numbers": [],
-    "pan_numbers": [],
-    "ifsc_codes": [],
-    "passport_numbers": [],
-    "upi_ids": [],
-    "bank_accounts": [],
-    "driving_licences": []
-  },
-  "relationships": [
-    {
-      "subject": "Rohan Kumar",
-      "relation": "PARKED",
-      "object": "Toyota Innova Crysta",
-      "source_span": "The complainant stated that he had parked his Toyota Innova Crysta ..."
-    }
-  ]
-}
-```
-
-This request also writes the extracted case, entities, and relationships to Neo4j as a side effect.
+43 tests covering NER extraction, regex extraction (FIR number, phone, vehicle, person attributes, incident details), contradiction detection (attribute, temporal-spatial, time overlap logic), and query engine with mocked Groq and Neo4j.
 
 ---
 
-## Graph model
+## Known Limitations
 
-- `(:Case {fir_number, filename, id})` — one node per uploaded FIR.
-- `(:Entity {text, type, case_key?})` — extracted entities. Entities with globally unique identifier types (vehicle number, phone number, IMEI, Aadhaar, PAN, passport, UPI ID, bank account, IFSC) are shared across cases. All other entity types are scoped per-case via `case_key`.
-- `(:Case)-[:MENTIONS]->(:Entity)` — links a case to every entity it mentions.
-- `(:Entity)-[:RELATION {type, fir, source_span}]->(:Entity)` — a verified factual relationship extracted from the document text, with the relation type and supporting source span attached as edge properties.
-
-### Viewing the graph
-
-In Neo4j Browser:
-
-```cypher
-MATCH (c:Case)-[m:MENTIONS]->(e:Entity)
-OPTIONAL MATCH (e)-[r:RELATION]->(o:Entity)
-RETURN c, m, e, r, o
-```
-
-Switch to the **Graph** view (not Table) to see it visually. If entity nodes render with the wrong label, set the node caption for the `Entity` label to `{text}` in Neo4j Browser's style settings.
+- spaCy `en_core_web_md` occasionally misclassifies entity types (e.g. organization names tagged as persons). The dedicated regex extractor is the source of truth for structured identifiers — phone numbers, vehicle plates, and other identifiers extracted by regex take precedence over NER output.
+- OCR may misread currency symbols (₹) as leading digits. Manual verification recommended for financial figures in scanned documents.
+- Groq free tier has a 100k token/day limit. Uploading many large documents in a single session may exhaust the limit and cause relation extraction to return empty results silently.
+- Relation names extracted by the LLM are not normalized — `FLED_IN` and `ESCAPED_ON` are treated as different relation types even if semantically equivalent. Contradiction detection on relation type requires exact string match.
+- The query engine generates Cypher via LLM. Complex or ambiguous queries may produce invalid Cypher; errors are returned to the user with the raw message.
+- No authentication or access control — suitable for local development and demo use only.
+- FIR number deduplication uses regex extraction. Documents without a recognizable FIR number format fall back to filename-based deduplication.
 
 ---
 
-## Project structure
+## Research Contribution
 
-```
-backend/
-├── ingestion/       # PDF/OCR text extraction, text cleaning
-├── nlp/             # NER, regex-based structured extraction, field stripping
-├── reasoning/        # LLM-based relationship extraction and verification
-├── graph/           # Neo4j connection and write logic
-└── main.py          # FastAPI app and /extract endpoint
-```
+The novelty is not in using AI individually but in integrating multiple AI techniques into an explainable reasoning framework:
+
+- A unified document processing pipeline handling both digital and scanned evidence
+- A temporal knowledge graph built from heterogeneous evidence, with FIR-scoped entity deduplication and cross-FIR global entity linking
+- Three classes of automatic contradiction detection across independent evidence streams
+- Explainable AI — every relationship is stored with its source span, every query answer includes the Cypher used to generate it, every contradiction is linked to the exact document text that supports it
 
 ---
 
-## Roadmap
+## Author
 
-- Contradiction detection across relationships and documents (in progress).
+Dilshad
 
----
-
-## Vision / Planned Architecture
-
-The current implementation handles single-document FIR extraction end-to-end (OCR/text → NER → relationship extraction → Neo4j). The longer-term system extends this to a multi-source investigation platform:
-
-### Planned input types
-
-- Scanned documents (FIRs, witness statements, police reports) — via OCR
-- Digital text documents
-- Call logs (structured/CSV)
-- GPS logs (structured/CSV)
-
-### Planned pipeline
-
-```
-Raw Evidence
-     │
-     ▼
-OCR + Text Extraction
-     │
-     ▼
-NLP Processing
-(Entity extraction — people, places, times, vehicles, phone numbers)
-(Relationship extraction — "A called B", "X was at Y")
-     │
-     ▼
-Knowledge Graph (Neo4j)
-     │
-     ├──► Timeline Reconstruction
-     │
-     ├──► Contradiction Detection
-     │    (cross-reference entities + timestamps across sources)
-     │
-     └──► Query Interface (LLM + RAG over graph)
-               │
-               ▼
-        Investigation Dashboard (React)
-```
-
-### Planned tech stack additions
-
-- PostgreSQL — raw evidence storage
-- FAISS — similar-case retrieval via embeddings
-- React — frontend dashboard
-
-### Planned outputs
-
-- Entity-relationship graph (visual)
-- Chronological timeline
-- Contradiction report
-- Natural language query answers with evidence citations
-- Case summary report
-
+GitHub: [Dilshad002](https://github.com/Dilshad002)

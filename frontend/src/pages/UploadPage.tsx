@@ -1,9 +1,7 @@
 import { useState, useCallback } from 'react'
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2, X } from 'lucide-react'
-import axios from 'axios'
+import api from '../lib/api'
 import { useApp } from '../store/AppContext'
-
-const API = 'http://localhost:8000'
 
 type Status = 'idle' | 'uploading' | 'success' | 'error'
 
@@ -38,7 +36,7 @@ export default function UploadPage() {
     const form = new FormData()
     form.append('file', file)
     try {
-      const res = await axios.post(`${API}/extract`, form)
+      const res = await api.post(`/extract`, form)
       setResult(res.data)
       addUpload(res.data)
       setStatus('success')
@@ -52,7 +50,7 @@ export default function UploadPage() {
   setDeleting(record.filename)
   if (record.fir_number) {
     try {
-      await axios.delete(`${API}/case`, { 
+      await api.delete(`/case`, { 
         params: { fir_number: record.fir_number } 
       })
     } catch (e) {

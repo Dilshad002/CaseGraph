@@ -1,4 +1,5 @@
 import uuid
+import os
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from backend.ingestion.ocr import extract_text_from_image
@@ -14,6 +15,8 @@ from backend.assistant.query_engine import query as run_query
 from backend.graph.connection import get_session
 from backend.assistant.query_engine import client as groq_client
 from backend.nlp.regex_extractor import extract_incident_details_llm
+from fastapi import Security, HTTPException, Depends
+from fastapi.security import APIKeyHeader
 
 app = FastAPI(title="CaseGraph API")
 
@@ -25,11 +28,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+API_KEY = os.getenv("API_KEY", "casegraph-dev-key")
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def verify_api_key(key: str = Security(api_key_header)):
+    if key != API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid or missing API key")
+
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
 
-@app.post("/extract")
+@app.post("/extract", dependencies=[Depends(verify_api_key)])
 async def extract(file: UploadFile = File(...)):
     contents = await file.read()
 
@@ -72,10 +82,8 @@ async def extract(file: UploadFile = File(...)):
             accused_name = name
         if "complainant" in refs:
             complainant_name = name
-    print(f"Accused: {accused_name}, Complainant: {complainant_name}")
 
     incident = extract_incident_details_llm(cleaned_text, groq_client, "llama-3.3-70b-versatile")
-    print(f"INCIDENT LLM: {incident}")
     write_incident_to_graph(fir_number, incident, accused_name, complainant_name)
 
     return {
@@ -86,7 +94,7 @@ async def extract(file: UploadFile = File(...)):
         "relationships": relationships,
     }
 
-@app.get("/graph")
+@app.get("/graph", dependencies=[Depends(verify_api_key)])
 def get_graph():
     with get_session() as session:
         nodes = {}
@@ -132,7 +140,7 @@ def get_graph():
 
         return {"elements": elements}
 
-@app.delete("/case")
+@app.delete("/case", dependencies=[Depends(verify_api_key)])
 def delete_case(fir_number: str):
     with get_session() as session:
         session.run(
@@ -168,10 +176,10 @@ def delete_case(fir_number: str):
         )
     return {"deleted": fir_number}
 
-@app.get("/contradict")
+@app.get("/contradict", dependencies=[Depends(verify_api_key)])
 def contradictions(entity: str):
     return detect_contradictions(entity)
 
-@app.get("/query")
+@app.get("/query", dependencies=[Depends(verify_api_key)])
 def query_endpoint(question: str):
     return run_query(question)

@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { AlertTriangle, ChevronDown, ChevronUp, Search } from 'lucide-react'
-import axios from 'axios'
-
-const API = 'http://localhost:8000'
+import api from '../lib/api'
 
 interface Contradiction {
   type: string
@@ -30,7 +28,7 @@ export default function ContradictionsPage() {
     setLoading(true)
     setResult(null)
     try {
-      const res = await axios.get(`${API}/contradict`, { params: { entity } })
+      const res = await api.get(`/contradict`, { params: { entity } })
       setResult(res.data)
     } finally {
       setLoading(false)
