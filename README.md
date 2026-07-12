@@ -31,7 +31,9 @@ Existing case management tools store and retrieve evidence. They do not reason o
 
 ## Architecture
 
-![CaseGraph Homepage](assets/cg-architecture.svg)
+<p align="center">
+  <img src="assets/cg-architecture.svg" width="500">
+</p>
 
 ---
 
