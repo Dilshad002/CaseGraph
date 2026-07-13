@@ -6,7 +6,7 @@ CaseGraph augments human investigators by eliminating manual evidence correlatio
 
 ---
 
-![CaseGraph Homepage](assets/cg-home.png)
+![CaseGraph](assets/demo.gif)
 
 ## Problem
 
