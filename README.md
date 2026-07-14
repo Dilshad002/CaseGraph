@@ -1,8 +1,15 @@
 # CaseGraph
 
+[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://case-graph.vercel.app/)
+[![Tech](https://img.shields.io/badge/backend-FastAPI-009688)](#tech-stack)
+[![Graph](https://img.shields.io/badge/graph-Neo4j-4581C3)](#tech-stack)
+[![LLM](https://img.shields.io/badge/LLM-Groq%20Llama%203.3-orange)](#tech-stack)
+
 An AI-powered criminal investigation support system that ingests FIR documents, extracts entities and relationships, builds a temporal knowledge graph, detects contradictions across sources, and provides explainable investigative insights via natural language queries.
 
 CaseGraph augments human investigators by eliminating manual evidence correlation. Every output is traceable back to its source document. No black-box conclusions.
+
+**[→ Try the live demo](https://case-graph.vercel.app/)**
 
 ---
 
@@ -247,8 +254,4 @@ The novelty is not in using AI individually but in integrating multiple AI techn
 
 ---
 
-## Author
-
-Dilshad
-
-GitHub: [Dilshad002](https://github.com/Dilshad002)
+GitHub: [Dilshad002](https://github.com/Dilshad002) Twitter: [dilshad._.d](https://x.com/dilshaddilshu8)
