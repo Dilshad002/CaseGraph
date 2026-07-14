@@ -134,7 +134,11 @@ RELATION_KEYWORDS = {
     "REPORTED_STOLEN": [
         "reported stolen",
         "was stolen",
-        "were stolen"
+        "were stolen", 
+        "stole",
+        "steal",
+        "stolen", 
+        "steal"
     ],
 
     "CONFRONTED": [
