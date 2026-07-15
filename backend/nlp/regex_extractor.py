@@ -1,7 +1,7 @@
 import re
 import json
 
-PHONE_PATTERN = re.compile(r"(?:\+91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}")
+PHONE_PATTERN = re.compile(r"(?<!\d)(?:\+91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}(?!\d)")
 VEHICLE_PATTERN = re.compile(r'\b[A-Z]{2}[\s\-]?\d{1,2}[\s\-]?[A-Z]{1,3}[\s\-]?\d{4}\b')
 FIR_NUMBER_PATTERN = re.compile(
     r'\b(?:FIR\s*(?:No\.?|Number)?|Case\s*No\.?|Crime\s*No\.?)\s*:?\s*([A-Za-z0-9-]+(?:/[A-Za-z0-9-]+){1,3})\b',
@@ -13,7 +13,7 @@ AADHAAR_PATTERN = re.compile(r'(?:Aadhaar|Aadhar)\s*:?\s*(\d{4}\s?\d{4}\s?\d{4})
 PAN_PATTERN = re.compile(r'\b([A-Z]{5}\d{4}[A-Z])\b')
 IFSC_PATTERN = re.compile(r'\b([A-Z]{4}0[A-Z0-9]{6})\b')
 PASSPORT_PATTERN = re.compile(r'(?:Passport\s*(?:No\.?|Number)?)\s*:?\s*([A-Z]\d{7})\b', re.IGNORECASE)
-UPI_PATTERN = re.compile(r'\b([\w.\-]+@(?:okaxis|ybl|paytm|oksbi|okhdfcbank|okicici|okaxisp|apl|axl|ibl|sbi|hdfcbank))\b', re.IGNORECASE)
+UPI_PATTERN = re.compile(r'\b([\w.\-]+@(?:okaxis|ybl|paytm|oksbi|okhdfcbank|okicici|okaxisp|apl|axl|ibl|sbi|hdfcbank|phonepe|googlepay|okbizaxis|jio|fbl|idfcbank|kotak|axisbank))\b', re.IGNORECASE)
 BANK_ACCOUNT_PATTERN = re.compile(r'(?:Bank\s*Account|Account\s*No\.?|A/C\s*No\.?)\s*(?:Mentioned)?:?\s*(\d{9,18})\b', re.IGNORECASE)
 DRIVING_LICENCE_PATTERN = re.compile(r'(?:Driving\s*Licen[cs]e)\s*:?\s*([A-Z]{2}\d{13,14})\b', re.IGNORECASE)
 
