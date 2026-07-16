@@ -27,3 +27,7 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# corpus pdfs
+corpus_pdfs/
+data/

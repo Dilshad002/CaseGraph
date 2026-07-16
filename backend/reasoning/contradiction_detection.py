@@ -1,6 +1,11 @@
 from backend.graph.connection import get_session
 from datetime import datetime
 
+NON_CONTRADICTORY_RELATION_PREFIXES = ("COMMITTED_",)
+
+def _is_repeatable_event_relation(relation_type: str) -> bool:
+    return any(relation_type.upper().startswith(p) for p in NON_CONTRADICTORY_RELATION_PREFIXES)
+
 def parse_time(t: str) -> datetime:
     if not t:
         return None
@@ -99,6 +104,8 @@ def detect_contradictions(entity_text: str) -> dict:
         relation_groups[key].append(rel)
 
     for relation_type, rels in relation_groups.items():
+        if _is_repeatable_event_relation(relation_type):
+            continue
         fir_objects = {}
         for rel in rels:
             fir = rel["fir_number"]
